@@ -34,19 +34,39 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
         torchvision.utils.save_image(rendering, os.path.join(render_path, '{0:05d}'.format(idx) + ".png"))
         torchvision.utils.save_image(gt, os.path.join(gts_path, '{0:05d}'.format(idx) + ".png"))
 
-def render_sets(dataset : ModelParams, iteration : int, pipeline : PipelineParams, skip_train : bool, skip_test : bool):
+def render_sets(dataset: ModelParams, iteration: int, pipeline: PipelineParams, skip_train: bool, skip_test: bool):
+    """
+    Render sets of images for training and testing using the specified parameters.
+
+    Args:
+        dataset (ModelParams): Parameters of the model and dataset.
+        iteration (int): Iteration number for loading the scene.
+        pipeline (PipelineParams): Parameters for the rendering pipeline.
+        skip_train (bool): Whether to skip rendering images for training.
+        skip_test (bool): Whether to skip rendering images for testing.
+
+    Returns:
+        None
+    """
+    #forbidden gradient computation
     with torch.no_grad():
+        # Create Gaussian model
         gaussians = GaussianModel(dataset.sh_degree)
+
+        # Load scene
         scene = Scene(dataset, gaussians, load_iteration=iteration, shuffle=False)
 
-        bg_color = [1,1,1] if dataset.white_background else [0, 0, 0]
+        # Set background color based on dataset
+        bg_color = [1, 1, 1] if dataset.white_background else [0, 0, 0]
         background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
 
+        # Render training set if not skipped
         if not skip_train:
-             render_set(dataset.model_path, "train", scene.loaded_iter, scene.getTrainCameras(), gaussians, pipeline, background)
+            render_set(dataset.model_path, "train", scene.loaded_iter, scene.getTrainCameras(), gaussians, pipeline, background)
 
+        # Render test set if not skipped
         if not skip_test:
-             render_set(dataset.model_path, "test", scene.loaded_iter, scene.getTestCameras(), gaussians, pipeline, background)
+            render_set(dataset.model_path, "test", scene.loaded_iter, scene.getTestCameras(), gaussians, pipeline, background)
 
 if __name__ == "__main__":
     # Set up command line argument parser
