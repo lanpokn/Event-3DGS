@@ -14,7 +14,7 @@ import math
 from diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianRasterizer
 from scene.gaussian_model import GaussianModel
 from utils.sh_utils import eval_sh
-
+#pc:gaussians
 def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, override_color = None):
     """
     Render the scene. 
@@ -82,6 +82,7 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
         colors_precomp = override_color
 
     # Rasterize visible Gaussians to image, obtain their radii (on screen). 
+    #radii:radio of gaussian in image
     rendered_image, radii = rasterizer(
         means3D = means3D,
         means2D = means2D,
@@ -92,9 +93,44 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
         rotations = rotations,
         cov3D_precomp = cov3D_precomp)
 
-    # Those Gaussians that were frustum culled or had a radius of 0 were not visible.
+    # Those Gaussians that were frustum culled(not in visible range) or had a radius of 0 were not visible.
     # They will be excluded from value updates used in the splitting criteria.
     return {"render": rendered_image,
-            "viewspace_points": screenspace_points,
+            "viewspace_points": screenspace_points,##gaossian 
             "visibility_filter" : radii > 0,
             "radii": radii}
+
+#a temp of using radii and visibility_filter to get a depth map
+#need to be change a lot , but at least we can using similar way to get the information
+#you may need to use a simple
+
+# def generate_depth_map(viewspace_points, radii):
+#     # 获取屏幕尺寸，假设为width x height
+#     width, height = get_screen_size()
+
+#     # 初始化深度图
+#     depth_map = np.zeros((height, width), dtype=float)
+
+#     for i in range(len(viewspace_points)):
+#         x, y = viewspace_points[i][:2]  # 获取屏幕坐标
+#         radius = radii[i]
+
+#         # 确保点在屏幕范围内
+#         # x,y可以根据半径扩充，透明度也要根据高斯函数衰减
+#         if 0 <= x < width and 0 <= y < height:
+#             # 计算深度值，可以根据需要进行调整
+#             depth_value = calculate_depth_value(viewspace_points[i])
+
+#             # 将深度值存储到深度图中
+              #if depth_value<depth_map[int(y), int(x)]
+#             depth_map[int(y), int(x)] = depth_value
+
+#     return depth_map
+
+# def calculate_depth_value(point):
+#     # 根据需要进行深度值计算，可能涉及到视锥体等
+#     # 这里简单地使用z坐标作为深度值
+      # need more complicated way to deal with it
+      # may suffer from noise
+      # if opacity is too small use it, do not locate it
+#     return point[2]
