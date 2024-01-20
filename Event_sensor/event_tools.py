@@ -12,6 +12,7 @@ import numpy as np
 from src.event_file_io import EventsData
 import os
 from tqdm import tqdm
+from src.event_display import EventDisplay
 def rotation_matrix_to_quaternion(rotation_matrix):
     # 使用scipy的Rotation类来将旋转矩阵转换为四元数
     r = Rotation.from_matrix(rotation_matrix)
@@ -29,14 +30,14 @@ def simulate_event_camera(images,ev_full,dt=2857,lat=100, jit=10, ref=100, tau=3
     dsi.initSimu(images[0].shape[0], images[0].shape[1])
     dsi.initLatency(lat, jit, ref, tau)
     dsi.initContrast(th, th, th_noise)
-
+    init_bgn_hist_cpp("./Event_sensor/data/noise_neg_161lux.npy", "./Event_sensor/data/noise_neg_161lux.npy")
     isInit = False
     time = 0
-    #TODO tqdm
+    ed = EventDisplay("Events",  images[0].shape[1], images[0].shape[0], dt*2)
     for im in tqdm(images, desc="generating events", unit="frame"):
         im = cv2.cvtColor(im, cv2.COLOR_RGB2LUV)[:, :, 0]
-        # cv2.imshow("t", im)
-        # cv2.waitKey(1)
+        cv2.imshow("t", im)
+        cv2.waitKey(1)
         if not isInit:
             dsi.initImg(im)
             isInit = True
@@ -48,6 +49,7 @@ def simulate_event_camera(images,ev_full,dt=2857,lat=100, jit=10, ref=100, tau=3
                          np.array(buf["y"], dtype=np.uint16),
                          np.array(buf["p"], dtype=np.uint64),
                          10000000)
+            ed.update(ev, dt)
             ev_full.increase_ev(ev)
             time += dt
     return ev_full
@@ -57,10 +59,10 @@ def save_event_result(ev_full,event_path):
     ev_full.write(file_path)
     return file_path
     
-def generate_images(event_path,dt, total_dt_nums = 300):
+def generate_images(event_path,dt, total_dt_nums,width, height):
     events_data = EventsData()
     events_data.read_IEBCS_events(os.path.join(event_path,"raw.dat"), (total_dt_nums+1)*dt)
     ev_data = events_data.events[0]
     for idx in range(0,total_dt_nums):
-        img = events_data.display_events(ev_data,dt*idx,dt*(idx+1))
+        img = events_data.display_events(ev_data,dt*idx,dt*(idx+1),width, height)
         cv2.imwrite(os.path.join(event_path, '{0:05d}'.format(idx) + ".png"), img)
