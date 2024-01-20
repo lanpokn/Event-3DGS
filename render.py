@@ -20,7 +20,9 @@ from utils.general_utils import safe_state
 from argparse import ArgumentParser
 from arguments import ModelParams, PipelineParams, get_combined_args
 from gaussian_renderer import GaussianModel
-
+from Event_sensor.event_tools import *
+import copy
+from Event_sensor.src.event_buffer import EventBuffer
 def render_set(model_path, name, iteration, views, gaussians, pipeline, background):
     # Define paths for rendered images and ground truth
     render_path = os.path.join(model_path, name, "ours_{}".format(iteration), "renders")
@@ -29,7 +31,6 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
     makedirs(render_path, exist_ok=True)
     makedirs(gts_path, exist_ok=True)
 
-    print(views)
 
     for idx, view in enumerate(tqdm(views, desc="Rendering progress")):
         rendering = render(view, gaussians, pipeline, background)["render"]
@@ -74,15 +75,45 @@ def render_set_event(model_path, name, iteration, views, gaussians, pipeline, ba
     # Define paths for rendered images and ground truth
     render_path = os.path.join(model_path, name, "ours_{}".format(iteration), "renders")
     gts_path = os.path.join(model_path, name, "ours_{}".format(iteration), "gt")
-
+    event_path = os.path.join(model_path, name, "ours_{}".format(iteration), "event")
     makedirs(render_path, exist_ok=True)
     makedirs(gts_path, exist_ok=True)
-
+    makedirs(event_path, exist_ok=True)
+    img_list = []
+    gt = view.original_image[0:3, :, :]
+    rendering = render(view, gaussians, pipeline, background)["render"]
+    interpolation_number = 4
     for idx, view in enumerate(tqdm(views, desc="Rendering progress")):
         rendering = render(view, gaussians, pipeline, background)["render"]
         gt = view.original_image[0:3, :, :]
         torchvision.utils.save_image(rendering, os.path.join(render_path, '{0:05d}'.format(idx) + ".png"))
         torchvision.utils.save_image(gt, os.path.join(gts_path, '{0:05d}'.format(idx) + ".png"))
+        img_list.append(rendering)
+        if idx+1 == len(views):
+            break
+        view_next = views(idx+1)
+        q_start = rotation_matrix_to_quaternion(view.R)
+        q_end = rotation_matrix_to_quaternion(view_next.R)
+        T_start = view.T
+        T_end = view_next.T
+        for i in range(1,interpolation_number):
+            alpha = i / interpolation_number  # Linear interpolation parameter
+            # Linear interpolation for quaternions
+            q_temp = torch.slerp(torch.Tensor(q_start), torch.Tensor(q_end), alpha)
+            # Linear interpolation for translation vectors
+            T_temp = alpha * T_end + (1 - alpha) * T_start
+            # Create a temporary view
+            view_temp = copy.deepcopy(view)
+            view_temp.R = quaternion_to_rotation_matrix(q_temp)
+            view_temp.T = T_temp
+            rendering = render(view_temp, gaussians, pipeline, background)["render"]
+            img_list.append(rendering)
+        ev_full = EventBuffer(1)
+        dt = 2857
+        simulate_event_camera(img_list,ev_full,2857)
+        save_event_result(ev_full,event_path)
+        generate_images(event_path,dt*interpolation_number,total_dt_nums=300)
+        
 
 def render_sets_event(dataset: ModelParams, iteration: int, pipeline: PipelineParams, skip_train: bool, skip_test: bool):
     """
@@ -135,4 +166,4 @@ if __name__ == "__main__":
     # Initialize system state (RNG)
     safe_state(args.quiet)
 
-    render_sets(model.extract(args), args.iteration, pipeline.extract(args), args.skip_train, args.skip_test)
+    render_sets_event(model.extract(args), args.iteration, pipeline.extract(args), args.skip_train, args.skip_test)
