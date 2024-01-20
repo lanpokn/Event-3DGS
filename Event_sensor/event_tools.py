@@ -11,6 +11,7 @@ import dsi
 import numpy as np
 from src.event_file_io import EventsData
 import os
+from tqdm import tqdm
 def rotation_matrix_to_quaternion(rotation_matrix):
     # 使用scipy的Rotation类来将旋转矩阵转换为四元数
     r = Rotation.from_matrix(rotation_matrix)
@@ -23,6 +24,7 @@ def quaternion_to_rotation_matrix(quaternion):
     rotation_matrix = r.as_matrix()
     return rotation_matrix
 
+#images is a tensor file
 def simulate_event_camera(images,ev_full,dt=2857,lat=100, jit=10, ref=100, tau=300, th=0.3, th_noise=0.01):
     dsi.initSimu(images[0].shape[0], images[0].shape[1])
     dsi.initLatency(lat, jit, ref, tau)
@@ -30,8 +32,8 @@ def simulate_event_camera(images,ev_full,dt=2857,lat=100, jit=10, ref=100, tau=3
 
     isInit = False
     time = 0
-
-    for im in images:
+    #TODO tqdm
+    for im in tqdm(images, desc="generating events", unit="frame"):
         im = cv2.cvtColor(im, cv2.COLOR_RGB2LUV)[:, :, 0]
         # cv2.imshow("t", im)
         # cv2.waitKey(1)

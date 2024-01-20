@@ -10,6 +10,8 @@
 #
 
 import torch
+from torchvision.transforms import ToPILImage
+import cv2
 from scene import Scene
 import os
 from tqdm import tqdm
@@ -71,6 +73,13 @@ def render_sets(dataset: ModelParams, iteration: int, pipeline: PipelineParams, 
         # Render test set if not skipped
         if not skip_test:
             render_set(dataset.model_path, "test", scene.loaded_iter, scene.getTestCameras(), gaussians, pipeline, background)
+def rendering_to_cvimg(rendering):
+    to_pil = ToPILImage()
+    pil_image = to_pil(rendering)
+    opencv_image = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
+    return opencv_image
+    
+
 def render_set_event(model_path, name, iteration, views, gaussians, pipeline, background):
     # Define paths for rendered images and ground truth
     render_path = os.path.join(model_path, name, "ours_{}".format(iteration), "renders")
@@ -80,26 +89,28 @@ def render_set_event(model_path, name, iteration, views, gaussians, pipeline, ba
     makedirs(gts_path, exist_ok=True)
     makedirs(event_path, exist_ok=True)
     img_list = []
-    gt = view.original_image[0:3, :, :]
-    rendering = render(view, gaussians, pipeline, background)["render"]
-    interpolation_number = 4
+    interpolation_number = 3
     for idx, view in enumerate(tqdm(views, desc="Rendering progress")):
         rendering = render(view, gaussians, pipeline, background)["render"]
         gt = view.original_image[0:3, :, :]
         torchvision.utils.save_image(rendering, os.path.join(render_path, '{0:05d}'.format(idx) + ".png"))
         torchvision.utils.save_image(gt, os.path.join(gts_path, '{0:05d}'.format(idx) + ".png"))
-        img_list.append(rendering)
+        opencv_image = rendering_to_cvimg(rendering)
+        # cv2.imwrite(filename = "test.png",img=opencv_image)
+        img_list.append(opencv_image)
         if idx+1 == len(views):
             break
-        view_next = views(idx+1)
+        view_next = views[idx+1]
         q_start = rotation_matrix_to_quaternion(view.R)
         q_end = rotation_matrix_to_quaternion(view_next.R)
         T_start = view.T
         T_end = view_next.T
         for i in range(1,interpolation_number):
             alpha = i / interpolation_number  # Linear interpolation parameter
-            # Linear interpolation for quaternions
-            q_temp = torch.slerp(torch.Tensor(q_start), torch.Tensor(q_end), alpha)
+            # TODO , how to get better interpolation
+            #now only using Nlerp
+            q_temp = (1 - alpha) * q_start + alpha * q_end
+            q_temp = q_temp/np.linalg.norm(q_temp)
             # Linear interpolation for translation vectors
             T_temp = alpha * T_end + (1 - alpha) * T_start
             # Create a temporary view
@@ -107,12 +118,15 @@ def render_set_event(model_path, name, iteration, views, gaussians, pipeline, ba
             view_temp.R = quaternion_to_rotation_matrix(q_temp)
             view_temp.T = T_temp
             rendering = render(view_temp, gaussians, pipeline, background)["render"]
-            img_list.append(rendering)
-        ev_full = EventBuffer(1)
-        dt = 2857
-        simulate_event_camera(img_list,ev_full,2857)
-        save_event_result(ev_full,event_path)
-        generate_images(event_path,dt*interpolation_number,total_dt_nums=300)
+            opencv_image = rendering_to_cvimg(rendering)
+            img_list.append(opencv_image)
+    ev_full = EventBuffer(1)
+    dt = 2857
+    print("generating events...")
+    simulate_event_camera(img_list,ev_full,2857)
+    print("saving ...")
+    save_event_result(ev_full,event_path)
+    generate_images(event_path,dt*interpolation_number,total_dt_nums=300)
         
 
 def render_sets_event(dataset: ModelParams, iteration: int, pipeline: PipelineParams, skip_train: bool, skip_test: bool):
