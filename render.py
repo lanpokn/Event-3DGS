@@ -177,7 +177,8 @@ def render_set_blurry(model_path, name, iteration, views, gaussians, pipeline, b
 
     makedirs(blurry_path, exist_ok=True)
     img_list = []
-    interpolation_number = 2
+    #bigger inter number, better in realism of blurry
+    interpolation_number = 20
     for idx, view in enumerate(tqdm(views, desc="Rendering progress")):
         rendering = render(view, gaussians, pipeline, background)["render"]
         gt = view.original_image[0:3, :, :]
@@ -200,7 +201,7 @@ def render_set_blurry(model_path, name, iteration, views, gaussians, pipeline, b
             q_start = q_i
             T_start = T_i
         else:
-            view_previous = views[idx+1]
+            view_previous = views[idx-1]
             q_iminus1 = rotation_matrix_to_quaternion(view_previous.R)
             T_iminus1 = view_previous.T
             q_start = Nlerp(q_iminus1,q_i,alpha_blurry)
@@ -220,8 +221,12 @@ def render_set_blurry(model_path, name, iteration, views, gaussians, pipeline, b
             view_temp = Generate_new_view(view,R_temp,T_temp)
             rendering = render(view_temp, gaussians, pipeline, background)["render"]
             rendering_list.append(rendering)
-            # torchvision.utils.save_image(rendering, os.path.join(render_path, '{0:05d}'.format(idx*interpolation_number+i) + "po.png"))
-        rendering_list
+        rendering_tensor = torch.stack(rendering_list)
+        average_rendering = torch.mean(rendering_tensor, dim=0)
+        torchvision.utils.save_image(average_rendering, os.path.join(blurry_path, '{0:05d}'.format(idx) + ".png"))
+
+
+
         
 
 
@@ -257,16 +262,15 @@ def render_sets_mixed(dataset: ModelParams, iteration: int, pipeline: PipelinePa
 
         # Render training set if not skipped
         if not skip_train:
-            render_set_event(dataset.model_path, "train", scene.loaded_iter, scene.getTrainCameras(), gaussians, pipeline, background,args)
             if blurrySpeed > 0:
                 render_set_blurry(dataset.model_path, "train", scene.loaded_iter, scene.getTrainCameras(), gaussians, pipeline, background,args)
+            render_set_event(dataset.model_path, "train", scene.loaded_iter, scene.getTrainCameras(), gaussians, pipeline, background,args)
 
         # Render test set if not skipped
         if not skip_test:
-            render_set_event(dataset.model_path, "test", scene.loaded_iter, scene.getTestCameras(), gaussians, pipeline, background,args)
             if blurrySpeed > 0:
-                render_set_blurry(dataset.model_path, "train", scene.loaded_iter, scene.getTrainCameras(), gaussians, pipeline, background,args)
-
+                render_set_blurry(dataset.model_path, "test", scene.loaded_iter, scene.getTrainCameras(), gaussians, pipeline, background,args)
+            render_set_event(dataset.model_path, "test", scene.loaded_iter, scene.getTestCameras(), gaussians, pipeline, background,args)
 
 
 if __name__ == "__main__":
@@ -280,7 +284,7 @@ if __name__ == "__main__":
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--maxLoopN", default=-1, type=int)
     parser.add_argument("--old_event", action="store_true")
-    parser.add_argument("--blurrySpeed", default=-1, type=int)
+    parser.add_argument("--blurrySpeed", default=-1, type=float)
     args = get_combined_args(parser)
 
     print("Rendering " + args.model_path)
