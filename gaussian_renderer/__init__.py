@@ -101,17 +101,6 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
             "visibility_filter" : radii > 0,
             "radii": radii}
 
-# def project_points(points_3d, projection_matrix):
-#     # Convert points_3d to homogeneous coordinates
-#     points_3d_homogeneous = np.concatenate((points_3d, np.ones((points_3d.shape[0], 1))), axis=1)
-
-#     # Perform matrix multiplication for homogeneous coordinates
-#     points_2d_homogeneous = np.dot(points_3d_homogeneous, projection_matrix.T)
-
-#     # Normalize by the third coordinate to get 2D coordinates
-#     points_2d = points_2d_homogeneous[:, :2] / points_2d_homogeneous[:, 2][:, np.newaxis]
-
-
 #     return points_2d
 
 # these method should refer to forward.cu,like float2 point_image = { ndc2Pix(p_proj.x, W), ndc2Pix(p_proj.y, H) };
@@ -142,7 +131,7 @@ def project_points(points_3d, full_proj_transform):
     points_2d = points_2d_homogeneous[:, :2] / (points_2d_homogeneous[:, 3][:, np.newaxis] + epsilon)
 
     return points_2d
-def generate_depth_map(points_3d, camera_center, projection_matrix, image_size):
+def generate_depth_map(points_3d, camera_center, projection_matrix, image_size,radii):
     with torch.no_grad():
         # Move tensors to the device of points_3d
         camera_center = camera_center.to(points_3d.device)
@@ -171,13 +160,41 @@ def generate_depth_map(points_3d, camera_center, projection_matrix, image_size):
 
         # Iterate over projected points and compute depth map
         for i in range(points_2d.shape[0]):
-            x, y = points_2d[i]
             depth_value = np.linalg.norm(camera_to_points[i])
 
             # Store depth value in depth map
-            if 0 <= x < width and 0 <= y < height:
-                if depth_value < depth_map_np[int(y), int(x)]:
-                    depth_map_np[int(y), int(x)] = depth_value
+            # x, y = points_2d[i]
+            # if 0 <= x < width and 0 <= y < height:
+            # x, y = points_2d[i]
+            # radius = int(max(1/2*radii[i],4))
+
+            # for dx in range(-radius, radius + 1):
+            #     for dy in range(-radius, radius + 1):
+            #         new_x, new_y = int(x + dx), int(y + dy)
+            #         if 0 <= new_x < width and 0 <= new_y < height:
+            #             if depth_value < depth_map_np[new_y, new_x]:
+            #                 depth_map_np[new_y, new_x] = depth_value
+            # 将循环的部分用NumPy数组表示
+            x_values = points_2d[:, 0]
+            y_values = points_2d[:, 1]
+            radius_values = int(max(1/2*radii[i],4))
+
+            # 生成一个与points_2d相同形状的数组，用于保存深度值
+            depth_map_np = np.full((height, width), np.inf)
+
+            # 生成所有可能的偏移值，以便进行向量化计算
+            dx_values = np.arange(-np.max(radius_values), np.max(radius_values) + 1)
+            dy_values = np.arange(-np.max(radius_values), np.max(radius_values) + 1)
+
+            # 计算所有可能的新坐标
+            new_x_values = x_values[:, np.newaxis] + dx_values
+            new_y_values = y_values[:, np.newaxis] + dy_values
+
+            # 创建布尔掩码，指示新坐标是否在图像范围内
+            mask = (new_x_values >= 0) & (new_x_values < width) & (new_y_values >= 0) & (new_y_values < height)
+
+            # 使用掩码更新深度图
+            depth_map_np[new_y_values[mask], new_x_values[mask]] = np.minimum(depth_map_np[new_y_values[mask], new_x_values[mask]], depth_value)
 
         # Convert the NumPy depth map back to a PyTorch tensor
         depth_map = torch.from_numpy(depth_map_np).to(points_3d.device)
@@ -251,7 +268,7 @@ def render_depth(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Te
 
     # Rasterize visible Gaussians to image, obtain their radii (on screen). 
     #radii:radio of gaussian in image
-    rendered_image, radii = rasterizer(
+    __, radii= rasterizer(
         means3D = means3D,
         means2D = means2D,
         shs = shs,
@@ -270,19 +287,21 @@ def render_depth(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Te
     # Use the boolean mask to filter means3D and opacity
     points_3d = means3D[valid_indices_radii]
     opacity = opacity[valid_indices_radii]
-
+    radii = radii[valid_indices_radii]
     # Second filtering step based on opacity
     with torch.no_grad():
         opacity_np = opacity.cpu().numpy()
-        valid_mask_opacity = opacity_np > 0.2
+        valid_mask_opacity = opacity_np > 0.1
         valid_indices_opacity = torch.from_numpy(valid_mask_opacity.astype(np.bool_))
         valid_indices_opacity = valid_indices_opacity.squeeze()
 
     # Use the boolean mask to filter means3D and opacity again
     points_3d = points_3d[valid_indices_opacity]
+    opacity = opacity[valid_indices_opacity]
+    radii = radii[valid_indices_opacity]
     camera_center = viewpoint_camera.camera_center
     projection_matrix = viewpoint_camera.full_proj_transform
     # image_size = [int(viewpoint_camera.image_height),int(viewpoint_camera.image_width)]
     image_size = [int(viewpoint_camera.image_width),int(viewpoint_camera.image_height)]
-    depth_map = generate_depth_map(points_3d, camera_center, projection_matrix, image_size)
+    depth_map = generate_depth_map(points_3d, camera_center, projection_matrix, image_size,radii)
     return depth_map
