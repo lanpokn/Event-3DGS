@@ -225,7 +225,7 @@ def render_set_blurry(model_path, name, iteration, views, gaussians, pipeline, b
         average_rendering = torch.mean(rendering_tensor, dim=0)
         torchvision.utils.save_image(average_rendering, os.path.join(blurry_path, '{0:05d}'.format(idx) + ".png"))
 
-def render_set_depth(model_path, name, iteration, views, gaussians, pipeline, background):
+def render_set_depth(model_path, name, iteration, views, gaussians, pipeline, background,args):
     # Define paths for rendered images and ground truth
     depth_path = os.path.join(model_path, name, "ours_{}".format(iteration), "depth")
 
