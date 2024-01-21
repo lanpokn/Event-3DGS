@@ -16,7 +16,7 @@ from scene import Scene
 import os
 from tqdm import tqdm
 from os import makedirs
-from gaussian_renderer import render, render_depth
+from gaussian_renderer import render, render_point
 import torchvision
 from utils.general_utils import safe_state
 from argparse import ArgumentParser
@@ -225,29 +225,29 @@ def render_set_blurry(model_path, name, iteration, views, gaussians, pipeline, b
         average_rendering = torch.mean(rendering_tensor, dim=0)
         torchvision.utils.save_image(average_rendering, os.path.join(blurry_path, '{0:05d}'.format(idx) + ".png"))
 
-def render_set_depth(model_path, name, iteration, views, gaussians, pipeline, background,args):
+def render_set_point(model_path, name, iteration, views, gaussians, pipeline, background,args):
     # Define paths for rendered images and ground truth
-    depth_path = os.path.join(model_path, name, "ours_{}".format(iteration), "depth")
+    point_path = os.path.join(model_path, name, "ours_{}".format(iteration), "point")
 
-    makedirs(depth_path, exist_ok=True)
+    makedirs(point_path, exist_ok=True)
 
     maxLoopN = args.maxLoopN
     for idx, view in enumerate(tqdm(views, desc="Rendering progress")):
         if idx >maxLoopN:
             break
-        depth_map = render_depth(view, gaussians, pipeline, background)
-        # Assuming depth_map is your tensor
-        depth_map_float = depth_map.clone()  # Create a copy to avoid modifying the original tensor
+        point_map = render_point(view, gaussians, pipeline, background)
+        # Assuming point_map is your tensor
+        point_map_float = point_map.clone()  # Create a copy to avoid modifying the original tensor
 
         # Find the minimum and maximum values excluding inf
-        min_val = depth_map_float[depth_map_float != float('inf')].min()
-        max_val = depth_map_float[depth_map_float != float('inf')].max()
+        min_val = point_map_float[point_map_float != float('inf')].min()
+        max_val = point_map_float[point_map_float != float('inf')].max()
 
         # Normalize the non-inf values to the range [0, 1)
-        depth_map_float[depth_map_float != float('inf')] = (depth_map_float[depth_map_float != float('inf')] - min_val) / (max_val - min_val)
-        depth_map_float[depth_map_float == float('inf')] = 100
-        save_path = os.path.join(depth_path, '{0:05d}_min{1:.4f}_max{2:.4f}.png'.format(idx, min_val.item(), max_val.item()))
-        torchvision.utils.save_image(depth_map_float,save_path)
+        point_map_float[point_map_float != float('inf')] = (point_map_float[point_map_float != float('inf')] - min_val) / (max_val - min_val)
+        point_map_float[point_map_float == float('inf')] = 100
+        save_path = os.path.join(point_path, '{0:05d}_min{1:.4f}_max{2:.4f}.png'.format(idx, min_val.item(), max_val.item()))
+        torchvision.utils.save_image(point_map_float,save_path)
 
         
 
@@ -270,7 +270,7 @@ def render_sets_mixed(dataset: ModelParams, iteration: int, pipeline: PipelinePa
     skip_train = args.skip_train
     skip_test = args.skip_test
     blurrySpeed = args.blurrySpeed
-    depth = args.depth
+    point = args.point
     #forbidden gradient computation
     with torch.no_grad():
         # Create Gaussian model
@@ -285,16 +285,16 @@ def render_sets_mixed(dataset: ModelParams, iteration: int, pipeline: PipelinePa
 
         # Render training set if not skipped
         if not skip_train:
-            if depth:
-                render_set_depth(dataset.model_path, "train", scene.loaded_iter, scene.getTrainCameras(), gaussians, pipeline, background,args)
+            if point:
+                render_set_point(dataset.model_path, "train", scene.loaded_iter, scene.getTrainCameras(), gaussians, pipeline, background,args)
             if blurrySpeed > 0:
                 render_set_blurry(dataset.model_path, "train", scene.loaded_iter, scene.getTrainCameras(), gaussians, pipeline, background,args)
             render_set_event(dataset.model_path, "train", scene.loaded_iter, scene.getTrainCameras(), gaussians, pipeline, background,args)
 
         # Render test set if not skipped
         if not skip_test:
-            if depth:
-                render_set_depth(dataset.model_path, "test", scene.loaded_iter, scene.getTrainCameras(), gaussians, pipeline, background,args)
+            if point:
+                render_set_point(dataset.model_path, "test", scene.loaded_iter, scene.getTrainCameras(), gaussians, pipeline, background,args)
             if blurrySpeed > 0:
                 render_set_blurry(dataset.model_path, "test", scene.loaded_iter, scene.getTrainCameras(), gaussians, pipeline, background,args)
             render_set_event(dataset.model_path, "test", scene.loaded_iter, scene.getTestCameras(), gaussians, pipeline, background,args)
@@ -312,7 +312,7 @@ if __name__ == "__main__":
     parser.add_argument("--maxLoopN", default=-1, type=int)
     parser.add_argument("--old_event", action="store_true")
     parser.add_argument("--blurrySpeed", default=-1, type=float)
-    parser.add_argument("--depth", action="store_true")
+    parser.add_argument("--point", action="store_true")
     args = get_combined_args(parser)
 
     print("Rendering " + args.model_path)

@@ -164,36 +164,28 @@ def generate_depth_map(points_3d, camera_center, projection_matrix, image_size,r
             depth_value = np.linalg.norm(camera_to_points[i])
 
             # Store depth value in depth map
-            # x, y = points_2d[i]
-            # if 0 <= x < width and 0 <= y < height:
-            # x, y = points_2d[i]
-            # radius = int(max(1/2*radii[i],4))
+            x, y = points_2d[i]
+            x = int(x)
+            y = int(y)
+            if 0 <= x < width and 0 <= y < height:
+                depth_map_np[y, x] = min(depth_value,depth_map_np[y, x])
+            # #can't use points_2d, should points_2d[i]
+            # x = int(points_2d[i, 0])
+            # y = int(points_2d[i, 1])
+            # radius = int(min(1/2*radii[i],2))
 
-            # for dx in range(-radius, radius + 1):
-            #     for dy in range(-radius, radius + 1):
-            #         new_x, new_y = int(x + dx), int(y + dy)
-            #         if 0 <= new_x < width and 0 <= new_y < height:
-            #             if depth_value < depth_map_np[new_y, new_x]:
-            #                 depth_map_np[new_y, new_x] = depth_value
-            # 将循环的部分用NumPy数组表示
-
-            #can't use points_2d, should points_2d[i]
-            x = int(points_2d[i, 0])
-            y = int(points_2d[i, 1])
-            radius = int(min(1/2*radii[i],2))
-
-            # 确保不越界，处理边界情况
-            x_min, x_max = max(x - radius, 0), min(x + radius, width-1)
-            y_min, y_max = max(y - radius, 0), min(y + radius, height - 1)
+            # # 确保不越界，处理边界情况
+            # x_min, x_max = max(x - radius, 0), min(x + radius, width-1)
+            # y_min, y_max = max(y - radius, 0), min(y + radius, height - 1)
 
 
-            # 更新 depth_map_np
-            depth_map_np[y_min:y_max + 1, x_min:x_max + 1] = np.minimum(depth_map_np[y_min:y_max + 1, x_min:x_max + 1], depth_value)
+            # # 更新 depth_map_np
+            # depth_map_np[y_min:y_max + 1, x_min:x_max + 1] = np.minimum(depth_map_np[y_min:y_max + 1, x_min:x_max + 1], depth_value)
         # Convert the NumPy depth map back to a PyTorch tensor
         depth_map = torch.from_numpy(depth_map_np).to(points_3d.device)
 
         return depth_map
-def render_depth(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, override_color = None):
+def render_point(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, override_color = None):
     """
     Render the scene. 
     
@@ -282,16 +274,16 @@ def render_depth(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Te
     opacity = opacity[valid_indices_radii]
     radii = radii[valid_indices_radii]
     # Second filtering step based on opacity
-    with torch.no_grad():
-        opacity_np = opacity.cpu().numpy()
-        valid_mask_opacity = opacity_np > 0.1
-        valid_indices_opacity = torch.from_numpy(valid_mask_opacity.astype(np.bool_))
-        valid_indices_opacity = valid_indices_opacity.squeeze()
+    # with torch.no_grad():
+    #     opacity_np = opacity.cpu().numpy()
+    #     valid_mask_opacity = opacity_np > 0.01
+    #     valid_indices_opacity = torch.from_numpy(valid_mask_opacity.astype(np.bool_))
+    #     valid_indices_opacity = valid_indices_opacity.squeeze()
 
-    # Use the boolean mask to filter means3D and opacity again
-    points_3d = points_3d[valid_indices_opacity]
-    opacity = opacity[valid_indices_opacity]
-    radii = radii[valid_indices_opacity]
+    # # Use the boolean mask to filter means3D and opacity again
+    # points_3d = points_3d[valid_indices_opacity]
+    # opacity = opacity[valid_indices_opacity]
+    # radii = radii[valid_indices_opacity]
     camera_center = viewpoint_camera.camera_center
     projection_matrix = viewpoint_camera.full_proj_transform
     # image_size = [int(viewpoint_camera.image_height),int(viewpoint_camera.image_width)]
