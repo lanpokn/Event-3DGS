@@ -10,6 +10,7 @@
 #
 
 import torch
+import numpy as np
 import math
 from diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianRasterizer
 from scene.gaussian_model import GaussianModel
@@ -100,38 +101,88 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
             "visibility_filter" : radii > 0,
             "radii": radii}
 
-def project_points(points_3d, projection_matrix):
-    # 将3D点云投影到2D平面
-    points_3d_homogeneous = torch.cat((points_3d, torch.ones(points_3d.shape[0], 1)), dim=1)
-    points_2d_homogeneous = torch.matmul(points_3d_homogeneous, projection_matrix.t())
-    points_2d = points_2d_homogeneous[:, :2] / points_2d_homogeneous[:, 2].unsqueeze(1)
-    
+# def project_points(points_3d, projection_matrix):
+#     # Convert points_3d to homogeneous coordinates
+#     points_3d_homogeneous = np.concatenate((points_3d, np.ones((points_3d.shape[0], 1))), axis=1)
+
+#     # Perform matrix multiplication for homogeneous coordinates
+#     points_2d_homogeneous = np.dot(points_3d_homogeneous, projection_matrix.T)
+
+#     # Normalize by the third coordinate to get 2D coordinates
+#     points_2d = points_2d_homogeneous[:, :2] / points_2d_homogeneous[:, 2][:, np.newaxis]
+
+
+#     return points_2d
+
+# these method should refer to forward.cu,like float2 point_image = { ndc2Pix(p_proj.x, W), ndc2Pix(p_proj.y, H) };
+def project_points(points_3d, full_proj_transform):
+    """
+    Project 3D points to 2D using a full projection transformation.
+
+    Args:
+        points_3d (np.ndarray): Array of shape (N, 3) representing 3D points.
+        full_proj_transform (np.ndarray): Full projection transformation matrix.
+
+    Returns:
+        np.ndarray: Array of shape (N, 2) containing the (u, v) coordinates on the film.
+    """
+    # Convert points_3d to homogeneous coordinates
+    points_3d_homogeneous = np.concatenate((points_3d, np.ones((points_3d.shape[0], 1), dtype=np.float32)), axis=1)
+
+    # Apply the transformation
+    # TODO full_proj_transform may need transverse
+    # full_proj_transform
+    points_2d_homogeneous = np.matmul(full_proj_transform.T, points_3d_homogeneous.T).T
+
+    # # Keep only the x and y coordinates
+    # points_2d = points_2d_homogeneous[:, :2]
+
+    # Normalize by the fourth coordinate to get 3D coordinates
+    epsilon = 0.0001
+    points_2d = points_2d_homogeneous[:, :2] / (points_2d_homogeneous[:, 3][:, np.newaxis] + epsilon)
+
     return points_2d
-
 def generate_depth_map(points_3d, camera_center, projection_matrix, image_size):
-    # 计算相机到点云的向量
-    camera_to_points = points_3d - camera_center
+    with torch.no_grad():
+        # Move tensors to the device of points_3d
+        camera_center = camera_center.to(points_3d.device)
+        projection_matrix = projection_matrix.to(points_3d.device)
 
-    # 投影到图像平面
-    points_2d = project_points(points_3d, projection_matrix)
+        # Convert PyTorch tensors to NumPy arrays
+        points_3d_np = points_3d.cpu().numpy()
 
-    # 获取图像尺寸
-    height, width = image_size
+        # Calculate camera to points vector
+        camera_to_points = points_3d_np - camera_center.cpu().numpy()
+        # Get image size
+        width, height = image_size
+        # Project points to 2D using NumPy
+        points_2d = project_points(points_3d_np, projection_matrix.cpu().numpy())
+        # Transform x from the range [-1, 1] to [0, width]
 
-    # 初始化深度图
-    depth_map = torch.zeros((height, width), dtype=torch.float32)
+        # __forceinline__ __device__ float ndc2Pix(float v, int S)
+        # {
+        #     return ((v + 1.0) * S - 1.0) * 0.5;
+        # }
+        points_2d[:, 0] = ((points_2d[:, 0] + 1) * width - 1)* 0.5
+        points_2d[:, 1] = ((points_2d[:, 1] + 1) * height - 1)* 0.5
 
-    # 遍历投影后的点，计算深度图
-    for i in range(points_2d.shape[0]):
-        x, y = points_2d[i]
-        depth_value = torch.norm(camera_to_points[i])
+        # Initialize depth map using NumPy
+        depth_map_np = np.full((height, width), float('inf'), dtype=np.float32)
 
-        # 将深度值存储到深度图中
-        if 0 <= x < width and 0 <= y < height:
-            depth_map[int(y), int(x)] = depth_value
+        # Iterate over projected points and compute depth map
+        for i in range(points_2d.shape[0]):
+            x, y = points_2d[i]
+            depth_value = np.linalg.norm(camera_to_points[i])
 
-    return depth_map
+            # Store depth value in depth map
+            if 0 <= x < width and 0 <= y < height:
+                if depth_value < depth_map_np[int(y), int(x)]:
+                    depth_map_np[int(y), int(x)] = depth_value
 
+        # Convert the NumPy depth map back to a PyTorch tensor
+        depth_map = torch.from_numpy(depth_map_np).to(points_3d.device)
+
+        return depth_map
 def render_depth(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, override_color = None):
     """
     Render the scene. 
@@ -209,17 +260,29 @@ def render_depth(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Te
         scales = scales,
         rotations = rotations,
         cov3D_precomp = cov3D_precomp)
-    visibility_filter = radii > 0
-    height=int(viewpoint_camera.image_height),
-    width=int(viewpoint_camera.image_width),
-    depth_map = torch.zeros((height, width), dtype=torch.float32)
+    
+    # First filtering step based on radii
+    with torch.no_grad():
+        radii_np = radii.cpu().numpy()
+        valid_mask_radii = radii_np > 0
+        valid_indices_radii = torch.from_numpy(valid_mask_radii.astype(np.bool_))
 
-    # 示例使用
-    # 假设 camera_center, projection_matrix, points_3d 是已知的
-    # image_size 是图像的尺寸，比如 (640, 480)
-    points_3d = means3D
+    # Use the boolean mask to filter means3D and opacity
+    points_3d = means3D[valid_indices_radii]
+    opacity = opacity[valid_indices_radii]
+
+    # Second filtering step based on opacity
+    with torch.no_grad():
+        opacity_np = opacity.cpu().numpy()
+        valid_mask_opacity = opacity_np > 0.2
+        valid_indices_opacity = torch.from_numpy(valid_mask_opacity.astype(np.bool_))
+        valid_indices_opacity = valid_indices_opacity.squeeze()
+
+    # Use the boolean mask to filter means3D and opacity again
+    points_3d = points_3d[valid_indices_opacity]
     camera_center = viewpoint_camera.camera_center
     projection_matrix = viewpoint_camera.full_proj_transform
-    image_size = [int(viewpoint_camera.image_height),int(viewpoint_camera.image_width)]
+    # image_size = [int(viewpoint_camera.image_height),int(viewpoint_camera.image_width)]
+    image_size = [int(viewpoint_camera.image_width),int(viewpoint_camera.image_height)]
     depth_map = generate_depth_map(points_3d, camera_center, projection_matrix, image_size)
     return depth_map

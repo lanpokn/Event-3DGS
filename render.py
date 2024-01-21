@@ -231,10 +231,23 @@ def render_set_depth(model_path, name, iteration, views, gaussians, pipeline, ba
 
     makedirs(depth_path, exist_ok=True)
 
-
+    maxLoopN = args.maxLoopN
     for idx, view in enumerate(tqdm(views, desc="Rendering progress")):
-        depth_map = render_depth(view, gaussians, pipeline, background)["render"]
-        torchvision.utils.save_image(depth_map, os.path.join(depth_path, '{0:05d}'.format(idx) + ".png"))
+        if idx >maxLoopN:
+            break
+        depth_map = render_depth(view, gaussians, pipeline, background)
+        # Assuming depth_map is your tensor
+        depth_map_float = depth_map.clone()  # Create a copy to avoid modifying the original tensor
+
+        # Find the minimum and maximum values excluding inf
+        min_val = depth_map_float[depth_map_float != float('inf')].min()
+        max_val = depth_map_float[depth_map_float != float('inf')].max()
+
+        # Normalize the non-inf values to the range [0, 1)
+        depth_map_float[depth_map_float != float('inf')] = (depth_map_float[depth_map_float != float('inf')] - min_val) / (max_val - min_val)
+        depth_map_float[depth_map_float == float('inf')] = 100
+        save_path = os.path.join(depth_path, '{0:05d}_min{1:.4f}_max{2:.4f}.png'.format(idx, min_val.item(), max_val.item()))
+        torchvision.utils.save_image(depth_map_float,save_path)
 
         
 
