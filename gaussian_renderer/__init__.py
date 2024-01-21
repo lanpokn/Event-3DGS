@@ -15,6 +15,7 @@ import math
 from diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianRasterizer
 from scene.gaussian_model import GaussianModel
 from utils.sh_utils import eval_sh
+from tqdm import tqdm
 #pc:gaussians
 def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, override_color = None):
     """
@@ -159,7 +160,7 @@ def generate_depth_map(points_3d, camera_center, projection_matrix, image_size,r
         depth_map_np = np.full((height, width), float('inf'), dtype=np.float32)
 
         # Iterate over projected points and compute depth map
-        for i in range(points_2d.shape[0]):
+        for i in tqdm(range(points_2d.shape[0]), desc="Processing points_2d", unit="point"):
             depth_value = np.linalg.norm(camera_to_points[i])
 
             # Store depth value in depth map
@@ -175,27 +176,19 @@ def generate_depth_map(points_3d, camera_center, projection_matrix, image_size,r
             #             if depth_value < depth_map_np[new_y, new_x]:
             #                 depth_map_np[new_y, new_x] = depth_value
             # 将循环的部分用NumPy数组表示
-            x_values = points_2d[:, 0]
-            y_values = points_2d[:, 1]
-            radius_values = int(max(1/2*radii[i],4))
 
-            # 生成一个与points_2d相同形状的数组，用于保存深度值
-            depth_map_np = np.full((height, width), np.inf)
+            #can't use points_2d, should points_2d[i]
+            x = int(points_2d[i, 0])
+            y = int(points_2d[i, 1])
+            radius = int(min(1/2*radii[i],2))
 
-            # 生成所有可能的偏移值，以便进行向量化计算
-            dx_values = np.arange(-np.max(radius_values), np.max(radius_values) + 1)
-            dy_values = np.arange(-np.max(radius_values), np.max(radius_values) + 1)
+            # 确保不越界，处理边界情况
+            x_min, x_max = max(x - radius, 0), min(x + radius, width-1)
+            y_min, y_max = max(y - radius, 0), min(y + radius, height - 1)
 
-            # 计算所有可能的新坐标
-            new_x_values = x_values[:, np.newaxis] + dx_values
-            new_y_values = y_values[:, np.newaxis] + dy_values
 
-            # 创建布尔掩码，指示新坐标是否在图像范围内
-            mask = (new_x_values >= 0) & (new_x_values < width) & (new_y_values >= 0) & (new_y_values < height)
-
-            # 使用掩码更新深度图
-            depth_map_np[new_y_values[mask], new_x_values[mask]] = np.minimum(depth_map_np[new_y_values[mask], new_x_values[mask]], depth_value)
-
+            # 更新 depth_map_np
+            depth_map_np[y_min:y_max + 1, x_min:x_max + 1] = np.minimum(depth_map_np[y_min:y_max + 1, x_min:x_max + 1], depth_value)
         # Convert the NumPy depth map back to a PyTorch tensor
         depth_map = torch.from_numpy(depth_map_np).to(points_3d.device)
 
