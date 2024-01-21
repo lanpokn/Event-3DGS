@@ -16,7 +16,7 @@ from scene import Scene
 import os
 from tqdm import tqdm
 from os import makedirs
-from gaussian_renderer import render
+from gaussian_renderer import render, render_depth
 import torchvision
 from utils.general_utils import safe_state
 from argparse import ArgumentParser
@@ -225,7 +225,16 @@ def render_set_blurry(model_path, name, iteration, views, gaussians, pipeline, b
         average_rendering = torch.mean(rendering_tensor, dim=0)
         torchvision.utils.save_image(average_rendering, os.path.join(blurry_path, '{0:05d}'.format(idx) + ".png"))
 
+def render_set_depth(model_path, name, iteration, views, gaussians, pipeline, background):
+    # Define paths for rendered images and ground truth
+    depth_path = os.path.join(model_path, name, "ours_{}".format(iteration), "depth")
 
+    makedirs(depth_path, exist_ok=True)
+
+
+    for idx, view in enumerate(tqdm(views, desc="Rendering progress")):
+        depth_map = render_depth(view, gaussians, pipeline, background)["render"]
+        torchvision.utils.save_image(depth_map, os.path.join(depth_path, '{0:05d}'.format(idx) + ".png"))
 
         
 
@@ -248,6 +257,7 @@ def render_sets_mixed(dataset: ModelParams, iteration: int, pipeline: PipelinePa
     skip_train = args.skip_train
     skip_test = args.skip_test
     blurrySpeed = args.blurrySpeed
+    depth = args.depth
     #forbidden gradient computation
     with torch.no_grad():
         # Create Gaussian model
@@ -262,12 +272,16 @@ def render_sets_mixed(dataset: ModelParams, iteration: int, pipeline: PipelinePa
 
         # Render training set if not skipped
         if not skip_train:
+            if depth:
+                render_set_depth(dataset.model_path, "train", scene.loaded_iter, scene.getTrainCameras(), gaussians, pipeline, background,args)
             if blurrySpeed > 0:
                 render_set_blurry(dataset.model_path, "train", scene.loaded_iter, scene.getTrainCameras(), gaussians, pipeline, background,args)
             render_set_event(dataset.model_path, "train", scene.loaded_iter, scene.getTrainCameras(), gaussians, pipeline, background,args)
 
         # Render test set if not skipped
         if not skip_test:
+            if depth:
+                render_set_depth(dataset.model_path, "test", scene.loaded_iter, scene.getTrainCameras(), gaussians, pipeline, background,args)
             if blurrySpeed > 0:
                 render_set_blurry(dataset.model_path, "test", scene.loaded_iter, scene.getTrainCameras(), gaussians, pipeline, background,args)
             render_set_event(dataset.model_path, "test", scene.loaded_iter, scene.getTestCameras(), gaussians, pipeline, background,args)
@@ -285,6 +299,7 @@ if __name__ == "__main__":
     parser.add_argument("--maxLoopN", default=-1, type=int)
     parser.add_argument("--old_event", action="store_true")
     parser.add_argument("--blurrySpeed", default=-1, type=float)
+    parser.add_argument("--depth", action="store_true")
     args = get_combined_args(parser)
 
     print("Rendering " + args.model_path)
