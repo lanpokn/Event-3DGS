@@ -91,20 +91,21 @@ def Generate_new_view(view,R,T):
 
     
 
-def render_set_event(model_path, name, iteration, views, gaussians, pipeline, background,maxLoopN):
+def render_set_event(model_path, name, iteration, views, gaussians, pipeline, background,maxLoopN,old_event):
     # Define paths for rendered images and ground truth
     if len(views) == 0:
         return
     render_path = os.path.join(model_path, name, "ours_{}".format(iteration), "renders")
     gts_path = os.path.join(model_path, name, "ours_{}".format(iteration), "gt")
     event_path = os.path.join(model_path, name, "ours_{}".format(iteration), "event")
-    event_old_path = os.path.join(model_path, name, "ours_{}".format(iteration), "event_old")
+    if old_event == True:
+        event_old_path = os.path.join(model_path, name, "ours_{}".format(iteration), "event_old")
+        makedirs(event_old_path, exist_ok=True)
+        img_old_list = []
     makedirs(render_path, exist_ok=True)
     makedirs(gts_path, exist_ok=True)
     makedirs(event_path, exist_ok=True)
-    makedirs(event_old_path, exist_ok=True)
     img_list = []
-    img_old_list = []
     interpolation_number = 3
     for idx, view in enumerate(tqdm(views, desc="Rendering progress")):
         rendering = render(view, gaussians, pipeline, background)["render"]
@@ -113,9 +114,9 @@ def render_set_event(model_path, name, iteration, views, gaussians, pipeline, ba
         torchvision.utils.save_image(gt, os.path.join(gts_path, '{0:05d}'.format(idx) + ".png"))
         opencv_image = rendering_to_cvimg(rendering)
         img_list.append(opencv_image)
-        
-        opencv_image = rendering_to_cvimg(gt)
-        img_old_list.append(opencv_image)
+        if old_event == True:
+            opencv_image = rendering_to_cvimg(gt)
+            img_old_list.append(opencv_image)
 
 
         if idx+1 == len(views):
@@ -150,16 +151,17 @@ def render_set_event(model_path, name, iteration, views, gaussians, pipeline, ba
     save_event_result(ev_full,event_path)
     generate_images(event_path,dt,maxLoopN*interpolation_number,img_list[0].shape[1],img_list[0].shape[0])
 
-    ev_full_old = EventBuffer(1)
-    dt_old = 2857*interpolation_number
-    print("generating old events...")
-    simulate_event_camera(img_old_list,ev_full_old,dt_old)
-    print("saving ...")
-    save_event_result(ev_full_old,event_old_path)
-    generate_images(event_old_path,dt_old,maxLoopN,img_old_list[0].shape[1],img_old_list[0].shape[0])
+    if old_event == True:
+        ev_full_old = EventBuffer(1)
+        dt_old = 2857*interpolation_number
+        print("generating old events...")
+        simulate_event_camera(img_old_list,ev_full_old,dt_old)
+        print("saving ...")
+        save_event_result(ev_full_old,event_old_path)
+        generate_images(event_old_path,dt_old,maxLoopN,img_old_list[0].shape[1],img_old_list[0].shape[0])
         
 
-def render_sets_event(dataset: ModelParams, iteration: int, pipeline: PipelineParams, skip_train: bool, skip_test: bool,maxLoopN:int):
+def render_sets_event(dataset: ModelParams, iteration: int, pipeline: PipelineParams, skip_train: bool, skip_test: bool,maxLoopN:int,old_event:bool):
     """
     Render sets of images for training and testing using the specified parameters.
 
@@ -187,11 +189,11 @@ def render_sets_event(dataset: ModelParams, iteration: int, pipeline: PipelinePa
 
         # Render training set if not skipped
         if not skip_train:
-            render_set_event(dataset.model_path, "train", scene.loaded_iter, scene.getTrainCameras(), gaussians, pipeline, background,maxLoopN)
+            render_set_event(dataset.model_path, "train", scene.loaded_iter, scene.getTrainCameras(), gaussians, pipeline, background,maxLoopN,old_event)
 
         # Render test set if not skipped
         if not skip_test:
-            render_set_event(dataset.model_path, "test", scene.loaded_iter, scene.getTestCameras(), gaussians, pipeline, background,maxLoopN)
+            render_set_event(dataset.model_path, "test", scene.loaded_iter, scene.getTestCameras(), gaussians, pipeline, background,maxLoopN,old_event)
 
 
 
@@ -205,6 +207,7 @@ if __name__ == "__main__":
     parser.add_argument("--skip_test", action="store_true")
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--maxLoopN", default=-1, type=int)
+    parser.add_argument("--old_event", action="store_true")
     args = get_combined_args(parser)
 
     print("Rendering " + args.model_path)
@@ -212,4 +215,4 @@ if __name__ == "__main__":
     # Initialize system state (RNG)
     safe_state(args.quiet)
 
-    render_sets_event(model.extract(args), args.iteration, pipeline.extract(args), args.skip_train, args.skip_test,args.maxLoopN)
+    render_sets_event(model.extract(args), args.iteration, pipeline.extract(args), args.skip_train, args.skip_test,args.maxLoopN,args.old_event)
