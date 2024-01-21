@@ -88,13 +88,14 @@ def Generate_new_view(view,R,T):
     view_new.full_proj_transform = (view_new.world_view_transform.unsqueeze(0).bmm(view_new.projection_matrix.unsqueeze(0))).squeeze(0)
     view_new.camera_center = view_new.world_view_transform.inverse()[3, :3]
     return view_new
-
-    
-
-def render_set_event(model_path, name, iteration, views, gaussians, pipeline, background,maxLoopN,old_event):
+   
+def render_set_event(model_path, name, iteration, views, gaussians, pipeline, background,args):
     # Define paths for rendered images and ground truth
     if len(views) == 0:
         return
+    maxLoopN = args.maxLoopN
+    old_event = args.old_event
+    blurry = args.blurry
     render_path = os.path.join(model_path, name, "ours_{}".format(iteration), "renders")
     gts_path = os.path.join(model_path, name, "ours_{}".format(iteration), "gt")
     event_path = os.path.join(model_path, name, "ours_{}".format(iteration), "event")
@@ -160,8 +161,7 @@ def render_set_event(model_path, name, iteration, views, gaussians, pipeline, ba
         save_event_result(ev_full_old,event_old_path)
         generate_images(event_old_path,dt_old,maxLoopN,img_old_list[0].shape[1],img_old_list[0].shape[0])
         
-
-def render_sets_event(dataset: ModelParams, iteration: int, pipeline: PipelineParams, skip_train: bool, skip_test: bool,maxLoopN:int,old_event:bool):
+def render_sets_event(dataset: ModelParams, iteration: int, pipeline: PipelineParams, args):
     """
     Render sets of images for training and testing using the specified parameters.
 
@@ -175,6 +175,8 @@ def render_sets_event(dataset: ModelParams, iteration: int, pipeline: PipelinePa
     Returns:
         None
     """
+    skip_train = args.skip_train
+    skip_test = args.skip_test
     #forbidden gradient computation
     with torch.no_grad():
         # Create Gaussian model
@@ -189,11 +191,11 @@ def render_sets_event(dataset: ModelParams, iteration: int, pipeline: PipelinePa
 
         # Render training set if not skipped
         if not skip_train:
-            render_set_event(dataset.model_path, "train", scene.loaded_iter, scene.getTrainCameras(), gaussians, pipeline, background,maxLoopN,old_event)
+            render_set_event(dataset.model_path, "train", scene.loaded_iter, scene.getTrainCameras(), gaussians, pipeline, background,args)
 
         # Render test set if not skipped
         if not skip_test:
-            render_set_event(dataset.model_path, "test", scene.loaded_iter, scene.getTestCameras(), gaussians, pipeline, background,maxLoopN,old_event)
+            render_set_event(dataset.model_path, "test", scene.loaded_iter, scene.getTestCameras(), gaussians, pipeline, background,args)
 
 
 
@@ -208,6 +210,7 @@ if __name__ == "__main__":
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--maxLoopN", default=-1, type=int)
     parser.add_argument("--old_event", action="store_true")
+    parser.add_argument("--blurry", action="store_true")
     args = get_combined_args(parser)
 
     print("Rendering " + args.model_path)
@@ -215,4 +218,4 @@ if __name__ == "__main__":
     # Initialize system state (RNG)
     safe_state(args.quiet)
 
-    render_sets_event(model.extract(args), args.iteration, pipeline.extract(args), args.skip_train, args.skip_test,args.maxLoopN,args.old_event)
+    render_sets_event(model.extract(args), args.iteration, pipeline.extract(args), args)
