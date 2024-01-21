@@ -90,7 +90,63 @@ def Generate_new_view(view,R,T):
     view_new.full_proj_transform = (view_new.world_view_transform.unsqueeze(0).bmm(view_new.projection_matrix.unsqueeze(0))).squeeze(0)
     view_new.camera_center = view_new.world_view_transform.inverse()[3, :3]
     return view_new
-   
+
+# def remove_isolated_points(depth_map, d):
+#     # 创建一个二值掩码，指示哪些点是inf
+#     inf_mask = torch.isinf(depth_map)
+
+#     # 使用 dilation 函数扩张非inf区域，以获取每个点的邻域
+#     neighborhood = torch.ones(1, 1, 2*d+1, 2*d+1, device=depth_map.device)
+#     non_inf_mask_dilated = F.conv2d(~inf_mask.unsqueeze(0).float(), neighborhood, padding=d).bool()
+
+#     # 将小于等于d的非inf连接组件标记为需要移除的点
+#     points_to_remove = (~non_inf_mask_dilated)
+
+#     # 将需要移除的点的深度值设为inf
+#     depth_map[points_to_remove] = float('inf')
+
+#     return depth_map
+
+# def average_inf_points(depth_map, d, th):
+#     # 创建一个二值掩码，指示哪些点是inf
+#     inf_mask = torch.isinf(depth_map)
+
+#     # 使用 dilation 函数扩张inf区域，以获取每个inf点的邻域
+#     neighborhood = torch.ones(1, 1, 2*d+1, 2*d+1, device=depth_map.device)
+#     inf_mask_dilated = F.conv2d(inf_mask.unsqueeze(0).float(), neighborhood, padding=d).bool()
+
+#     # 使用 region_grow 函数进行inf点的平均值处理
+#     depth_map = region_grow(depth_map, inf_mask_dilated, d,th)
+
+#     return depth_map
+
+# def region_grow(depth_map, inf_mask_dilated, d,th):
+#     # 获取inf点的坐标
+#     inf_points = torch.stack(torch.where(inf_mask_dilated), dim=1)
+
+#     for point in inf_points:
+#         y, x = point[0].item(), point[1].item()
+
+#         # 获取当前点的邻域
+#         neighborhood = depth_map[:, y-d:y+d+1, x-d:x+d+1]
+
+#         # 判断是否存在一个以上的深度值，且分布不仅仅在一侧
+#         unique_depths = torch.unique(neighborhood[~torch.isinf(neighborhood)])
+#         if len(unique_depths) > 1 and torch.max(unique_depths) - torch.min(unique_depths) > th:
+#             # 计算深度值的平均值
+#             average_depth = torch.mean(unique_depths)
+
+#             # 将当前点的深度值设为平均值
+#             depth_map[:, y, x] = average_depth
+
+#     return depth_map
+
+def edge_preserving_interpolation(depth_image, spatial_sigma, depth_sigma):
+    # 使用双边滤波器进行边缘保持插值
+    depth_image = rendering_to_cvimg(depth_image)
+    interpolated_depth = cv2.bilateralFilter(depth_image, d=0, sigmaColor=depth_sigma, sigmaSpace=spatial_sigma)
+
+    return interpolated_depth
 def render_set_event(model_path, name, iteration, views, gaussians, pipeline, background,args):
     # Define paths for rendered images and ground truth
     if len(views) == 0:
@@ -249,8 +305,32 @@ def render_set_point(model_path, name, iteration, views, gaussians, pipeline, ba
         save_path = os.path.join(point_path, '{0:05d}_min{1:.4f}_max{2:.4f}.png'.format(idx, min_val.item(), max_val.item()))
         torchvision.utils.save_image(point_map_float,save_path)
 
-        
+def render_set_depth(model_path, name, iteration, views, gaussians, pipeline, background,args):
+    # Define paths for rendered images and ground truth
+    depth_path = os.path.join(model_path, name, "ours_{}".format(iteration), "depth")
 
+    makedirs(depth_path, exist_ok=True)
+
+    maxLoopN = args.maxLoopN
+    for idx, view in enumerate(tqdm(views, desc="Rendering progress")):
+        if idx >maxLoopN:
+            break
+        point_map_float = render_point(view, gaussians, pipeline, background)
+        # Assuming point_map is your tensor
+        #point_map_float = point_map.clone()  # Create a copy to avoid modifying the original tensor
+        # Find the minimum and maximum values excluding inf
+        min_val = point_map_float[point_map_float != float('inf')].min()
+        max_val = point_map_float[point_map_float != float('inf')].max()
+
+        # Normalize the non-inf values to the range [0, 1)
+        point_map_float[point_map_float != float('inf')] = (point_map_float[point_map_float != float('inf')] - min_val) / (max_val - min_val)
+        point_map_float[point_map_float == float('inf')] = 100
+        spatial_sigma = 200  # 空间距离权重函数的标准差
+        depth_sigma = 0.1   # 深度值权重函数的标准差
+        interpolated_depth = edge_preserving_interpolation(point_map_float, spatial_sigma, depth_sigma)
+        save_path = os.path.join(depth_path, '{0:05d}_min{1:.4f}_max{2:.4f}.png'.format(idx, min_val.item(), max_val.item()))
+        # torchvision.utils.save_image(point_map_float,save_path)
+        cv2.imwrite(save_path,interpolated_depth)
 
 
 def render_sets_mixed(dataset: ModelParams, iteration: int, pipeline: PipelineParams, args):
@@ -271,6 +351,7 @@ def render_sets_mixed(dataset: ModelParams, iteration: int, pipeline: PipelinePa
     skip_test = args.skip_test
     blurrySpeed = args.blurrySpeed
     point = args.point
+    depth = args.depth
     #forbidden gradient computation
     with torch.no_grad():
         # Create Gaussian model
@@ -285,6 +366,8 @@ def render_sets_mixed(dataset: ModelParams, iteration: int, pipeline: PipelinePa
 
         # Render training set if not skipped
         if not skip_train:
+            if depth:
+                render_set_depth(dataset.model_path, "train", scene.loaded_iter, scene.getTrainCameras(), gaussians, pipeline, background,args)
             if point:
                 render_set_point(dataset.model_path, "train", scene.loaded_iter, scene.getTrainCameras(), gaussians, pipeline, background,args)
             if blurrySpeed > 0:
@@ -293,6 +376,8 @@ def render_sets_mixed(dataset: ModelParams, iteration: int, pipeline: PipelinePa
 
         # Render test set if not skipped
         if not skip_test:
+            if depth:
+                render_set_depth(dataset.model_path, "test", scene.loaded_iter, scene.getTrainCameras(), gaussians, pipeline, background,args)
             if point:
                 render_set_point(dataset.model_path, "test", scene.loaded_iter, scene.getTrainCameras(), gaussians, pipeline, background,args)
             if blurrySpeed > 0:
@@ -313,6 +398,7 @@ if __name__ == "__main__":
     parser.add_argument("--old_event", action="store_true")
     parser.add_argument("--blurrySpeed", default=-1, type=float)
     parser.add_argument("--point", action="store_true")
+    parser.add_argument("--depth", action="store_true")
     args = get_combined_args(parser)
 
     print("Rendering " + args.model_path)

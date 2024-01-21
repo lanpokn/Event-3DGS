@@ -274,11 +274,11 @@ def render_point(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Te
     opacity = opacity[valid_indices_radii]
     radii = radii[valid_indices_radii]
     # Second filtering step based on opacity
-    # with torch.no_grad():
-    #     opacity_np = opacity.cpu().numpy()
-    #     valid_mask_opacity = opacity_np > 0.01
-    #     valid_indices_opacity = torch.from_numpy(valid_mask_opacity.astype(np.bool_))
-    #     valid_indices_opacity = valid_indices_opacity.squeeze()
+    with torch.no_grad():
+        opacity_np = opacity.cpu().numpy()
+        valid_mask_opacity = opacity_np > 0.1
+        valid_indices_opacity = torch.from_numpy(valid_mask_opacity.astype(np.bool_))
+        valid_indices_opacity = valid_indices_opacity.squeeze()
 
     # # Use the boolean mask to filter means3D and opacity again
     # points_3d = points_3d[valid_indices_opacity]
