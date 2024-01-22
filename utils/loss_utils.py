@@ -15,14 +15,14 @@ from torch.autograd import Variable
 from math import exp
 def rgb_to_grayscale(image):
     # Convert RGB image to grayscale using the formula: Y = 0.299*R + 0.587*G + 0.114*B
-    grayscale_image = 0.299 * image[:, 0, :, :] + 0.587 * image[:, 1, :, :] + 0.114 * image[:, 2, :, :]
-    return grayscale_image.unsqueeze(1)  # Add channel dimension
+    grayscale_image = 0.299 * image[0, :, :] + 0.587 * image[1, :, :] + 0.114 * image[2, :, :]
+    return grayscale_image.unsqueeze(0)  # Add channel dimension
 
 def l1_loss_gray(network_output, gt):
     # Convert RGB images to grayscale
-    if network_output.size(1) == 3:
+    if network_output.size(-3) == 3:
         network_output_gray = rgb_to_grayscale(network_output)
-    if gt.size(1) == 3:    
+    if gt.size(-3) == 3:    
         gt_gray = rgb_to_grayscale(gt)
 
     return torch.abs((network_output_gray - gt_gray)).mean()
@@ -42,6 +42,21 @@ def create_window(window_size, channel):
     _2D_window = _1D_window.mm(_1D_window.t()).float().unsqueeze(0).unsqueeze(0)
     window = Variable(_2D_window.expand(channel, 1, window_size, window_size).contiguous())
     return window
+def ssim_gray(img1, img2, window_size=11, size_average=True):
+    if img1.size(-3) == 3:
+        img1_gray = rgb_to_grayscale(img1)
+    if img2.size(-3) == 3:    
+        img2_gray = rgb_to_grayscale(img2)
+
+    channel = img1_gray.size(-3)
+    window = create_window(window_size, channel)
+    # Convert RGB images to grayscale
+    if img1_gray.is_cuda:
+        window = window.cuda(img1_gray.get_device())
+    window = window.type_as(img1_gray)
+
+    return _ssim(img1_gray, img2_gray, window, window_size, channel, size_average)
+
 
 def ssim(img1, img2, window_size=11, size_average=True):
     channel = img1.size(-3)
