@@ -87,6 +87,16 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         image, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
 
         # Loss
+        # TODO, change to gray
+        # event: +1,-1,0, just to be a type of gray and need an initial img
+        # not that hard,just use a stack to locate img before
+        # thus,first event frame t =i corre to 3DGS frame i-dt and i+dt,dt is the acuumulation time
+        # and 3DGS can be generated arbitrayly, thus it can be done!
+        # what you need to do: make thses steps differentialable
+        # RGB to LUV, all RGB to spectral to LUV is good, use RGB is good, for it can make it more easily to converge(more posible set)
+        # but RGB is meaningless as input , only intensity graph can be generated
+
+        #first try to change gt_image and image to LUV, get L and then change the loss
         gt_image = viewpoint_cam.original_image.cuda()
         Ll1 = l1_loss(image, gt_image)
         loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image))
