@@ -13,6 +13,19 @@ import torch
 import torch.nn.functional as F
 from torch.autograd import Variable
 from math import exp
+def rgb_to_grayscale(image):
+    # Convert RGB image to grayscale using the formula: Y = 0.299*R + 0.587*G + 0.114*B
+    grayscale_image = 0.299 * image[:, 0, :, :] + 0.587 * image[:, 1, :, :] + 0.114 * image[:, 2, :, :]
+    return grayscale_image.unsqueeze(1)  # Add channel dimension
+
+def l1_loss_gray(network_output, gt):
+    # Convert RGB images to grayscale
+    if network_output.size(1) == 3:
+        network_output_gray = rgb_to_grayscale(network_output)
+    if gt.size(1) == 3:    
+        gt_gray = rgb_to_grayscale(gt)
+
+    return torch.abs((network_output_gray - gt_gray)).mean()
 
 def l1_loss(network_output, gt):
     return torch.abs((network_output - gt)).mean()
