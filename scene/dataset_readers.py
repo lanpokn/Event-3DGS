@@ -129,7 +129,7 @@ def storePly(path, xyz, rgb):
     ply_data = PlyData([vertex_element])
     ply_data.write(path)
 
-def readColmapSceneInfo(path, images, eval, llffhold=8):
+def readColmapSceneInfo(path, images, eval, is_gray = False,is_random = False,llffhold=8):
     try:
         cameras_extrinsic_file = os.path.join(path, "sparse/0", "images.bin")
         cameras_intrinsic_file = os.path.join(path, "sparse/0", "cameras.bin")
@@ -168,7 +168,16 @@ def readColmapSceneInfo(path, images, eval, llffhold=8):
         pcd = fetchPly(ply_path)
     except:
         pcd = None
-    pcd.colors[:,:] = 0.5
+    if is_gray:
+        pcd.colors[:,:] = 0.5
+        
+    #only test, very bad
+    if is_random:
+        pcd.colors[:,:] = 0.5
+        pcd.normals[:,:] = 0.5
+        pcd.points[:, :] = np.column_stack([np.random.rand(pcd.points.shape[0]), np.random.rand(pcd.points.shape[0]),np.random.rand(pcd.points.shape[0])])
+
+    #test
     scene_info = SceneInfo(point_cloud=pcd,
                            train_cameras=train_cam_infos,
                            test_cameras=test_cam_infos,
