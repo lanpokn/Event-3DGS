@@ -12,7 +12,7 @@
 import os
 import torch
 from random import randint
-from utils.loss_utils import l1_loss, ssim,l1_loss_gray,ssim_gray
+from utils.loss_utils import l1_loss, ssim,l1_loss_gray,ssim_gray,differentialable_event_simu,Normalize_event_frame
 from gaussian_renderer import render, network_gui
 import sys
 from scene import Scene, GaussianModel
@@ -121,10 +121,14 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             #use pop is wrong, is pop, then may discontinue
             viewpoint_cam_next = viewpoint_stack[index_next]
             render_pkg_next = render(viewpoint_cam_next, gaussians, pipe, bg)
-            image_next = render_pkg["render_pkg_next"]
+            image_next = render_pkg_next["render"]
+            img_diff = differentialable_event_simu(viewpoint_cam.original_image.cuda(),viewpoint_cam_next.original_image.cuda())
+            img_diff = differentialable_event_simu(image,image_next)
             gt_image = viewpoint_cam.original_image.cuda()
-            Ll1 = l1_loss(image, gt_image)
-            loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image))
+            gt_image = Normalize_event_frame(gt_image)
+            # Ll1 = l1_loss(img_diff, gt_image)
+            loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(img_diff, gt_image))
+            loss =  Ll1 
             loss.backward()
         elif args.gray == True:
             gt_image = viewpoint_cam.original_image.cuda()

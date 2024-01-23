@@ -13,9 +13,12 @@ import torch
 import torch.nn.functional as F
 from torch.autograd import Variable
 from math import exp
+import torchvision
 def rgb_to_grayscale(image):
     # Convert RGB image to grayscale using the formula: Y = 0.299*R + 0.587*G + 0.114*B
     grayscale_image = 0.299 * image[0, :, :] + 0.587 * image[1, :, :] + 0.114 * image[2, :, :]
+    # torch is rgb, opencv is bgr
+    # grayscale_image = image[0, :, :]
     return grayscale_image.unsqueeze(0)  # Add channel dimension
 
 def l1_loss_gray(network_output, gt):
@@ -26,6 +29,50 @@ def l1_loss_gray(network_output, gt):
         gt_gray = rgb_to_grayscale(gt)
 
     return torch.abs((network_output_gray - gt_gray)).mean()
+def differentialable_threld(x,C=0.3,e=0.00001,w = 10):
+    torch.sign(x)/(1 + torch.exp(w*(C - torch.abs(x))))
+
+def differentialable_event_simu(image,image_next):
+    img1 = rgb_to_grayscale(image)
+    img2 = rgb_to_grayscale(image_next)
+    torchvision.utils.save_image(img1, "img1.png")
+    torchvision.utils.save_image(img2, "img2.png")
+    # ##total physical, but not work
+    # epsilon = 1e-8  # avoid dividing 0
+    # img_diff = torch.log(img2) - torch.log(img1)
+    # C=0.3
+    # w=10
+    # factor1 = torch.sign(img_diff)
+    # factor2 = (1 + torch.exp(w * (C - torch.abs(img_diff))))
+    # result = (factor1 / factor2 + 1)/2
+    # torchvision.utils.save_image(result, "test.png")
+
+    #another way
+    epsilon = 1e-8  # avoid dividing 0
+    img_diff =(img2) - (img1)
+    C=0.3
+    w=10
+    factor1 = torch.sign(img_diff)
+    factor2 = (1 + torch.exp(w * (C - torch.abs(img_diff))))
+    result = (factor1 / factor2 + 1)/2
+    torchvision.utils.save_image(result, "test.png")
+
+    return result
+
+def Normalize_event_frame(gt_image):
+    #torch can only be from 0 to 1
+    #if both -1,1 is given one of them will become 0
+    event_image = torch.full_like(gt_image[0:1, :, :], 0.5)
+
+    # positive
+    condition_1 = torch.logical_and(gt_image[0, :, :] > 0.1, gt_image[0, :, :] < 0.9)
+    #negtive
+    condition_2 = torch.logical_and(gt_image[2, :, :] > 0.1, gt_image[2, :, :] < 0.9)
+
+    event_image[0,condition_1] = 1
+    event_image[0,condition_2] = 0
+    # torchvision.utils.save_image(event_image, "test.png")
+    return event_image
 
 def l1_loss(network_output, gt):
     return torch.abs((network_output - gt)).mean()

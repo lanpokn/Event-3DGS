@@ -281,7 +281,7 @@ class EventsData:
             assert events_filtered['y'].max() < height, "out of bound events: y = {}, h = {}".format(events_filtered['y'].max(), height)
             
             ON_index = np.where(events_filtered['p'] == 1)
-            img[events_filtered['y'][ON_index], events_filtered['x'][ON_index], :] = [30, 30, 220] * events_filtered['p'][ON_index][:, None]  # red [0, 0, 255]
+            img[events_filtered['y'][ON_index], events_filtered['x'][ON_index], :] = [30, 30, 220] * events_filtered['p'][ON_index][:, None]  # red [0, 0, 255]#bgr
             
             OFF_index = np.where(events_filtered['p'] == 0)
             img[events_filtered['y'][OFF_index], events_filtered['x'][OFF_index], :] = [200, 30, 30] * (events_filtered['p'][OFF_index] + 1)[:, None]  # green [0, 255, 0], blue [255, 0, 0]
