@@ -73,10 +73,17 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             gaussians.oneupSHdegree()
 
         # Pick a random Camera
+        # only copy in first iteration
         if not viewpoint_stack:
             viewpoint_stack = scene.getTrainCameras().copy()
-        viewpoint_cam = viewpoint_stack.pop(randint(0, len(viewpoint_stack)-1))
 
+        # viewpoint_cam = viewpoint_stack.pop(randint(0, len(viewpoint_stack)-1))
+        if args.event == True:
+            index = randint(0, len(viewpoint_stack)-2)
+        else:
+            index = randint(0, len(viewpoint_stack)-1)
+        # viewpoint_cam = viewpoint_stack.pop(index)
+        viewpoint_cam = viewpoint_stack[index]
         # Render
         if (iteration - 1) == debug_from:
             pipe.debug = True
@@ -107,6 +114,14 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim_gray(image, gt_image))
             loss.backward()
         elif args.event == True :
+            if index == len(viewpoint_stack):
+                print("exceed error")
+            #before it use a pop func, thus that item is nolongger exist
+            index_next = index+1
+            #use pop is wrong, is pop, then may discontinue
+            viewpoint_cam_next = viewpoint_stack[index_next]
+            render_pkg_next = render(viewpoint_cam_next, gaussians, pipe, bg)
+            image_next = render_pkg["render_pkg_next"]
             gt_image = viewpoint_cam.original_image.cuda()
             Ll1 = l1_loss(image, gt_image)
             loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image))
@@ -119,7 +134,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
 
         iter_end.record()
-
+        # no_grad, thus is not so important
         with torch.no_grad():
             # Progress bar
             ema_loss_for_log = 0.4 * loss.item() + 0.6 * ema_loss_for_log
@@ -230,7 +245,7 @@ if __name__ == "__main__":
     parser.add_argument("--save_iterations", nargs="+", type=int, default=[4_000, 30_000])
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[])
-    parser.add_argument("--start_checkpoint", type=str, default = None)
+    parser.add_argument("--start_checkpoint", type=str, default = None) 
     
     args = parser.parse_args(sys.argv[1:])
     args.save_iterations.append(args.iterations)
