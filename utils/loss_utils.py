@@ -38,27 +38,28 @@ def differentialable_event_simu(image,image_next):
     img2 = rgb_to_grayscale(image_next)
     # torchvision.utils.save_image(img1, "img1.png")
     # torchvision.utils.save_image(img2, "img2.png")
-    ##total physical, but not work
+    #total physical, but not work
     # epsilon = 1e-8  # avoid dividing 0
-    # img_diff = torch.log(img2) - torch.log(img1)
-    # C=0.3
+    img_diff = torch.log(img2) - torch.log(img1)
+    C=0.3
+    w=10
+    factor1 = torch.sign(img_diff)
+    factor2 = (1 + torch.exp(w * (C - torch.abs(img_diff))))
+    result = (factor1 / factor2 + 1)/2
+    # torchvision.utils.save_image(result, "test.png")
+
+    # another way
+    # epsilon = 1e-8  # avoid dividing 0
+    # img_diff =(img2) - (img1)
+    # C=0.03
     # w=10
     # factor1 = torch.sign(img_diff)
     # factor2 = (1 + torch.exp(w * (C - torch.abs(img_diff))))
     # result = (factor1 / factor2 + 1)/2
     # torchvision.utils.save_image(result, "test.png")
 
-    # another way
-    epsilon = 1e-8  # avoid dividing 0
-    img_diff =(img2) - (img1)
-    C=0.03
-    w=10
-    factor1 = torch.sign(img_diff)
-    factor2 = (1 + torch.exp(w * (C - torch.abs(img_diff))))
-    result = (factor1 / factor2 + 1)/2
-    torchvision.utils.save_image(result, "test.png")
-
     return result
+
 
 def Normalize_event_frame(gt_image):
     #torch can only be from 0 to 1
@@ -76,25 +77,56 @@ def Normalize_event_frame(gt_image):
     # torchvision.utils.save_image(event_image, "test.png")
     return event_image
 
+
 def l1_loss(network_output, gt):
     return torch.abs((network_output - gt)).mean()
 def l1_loss_event(network_output, gt, weight=10000):
     def grayscale_to_pointcloud(image, device):
-        _, h, w = image.shape
-        y_coords, x_coords = torch.meshgrid(torch.arange(h, device=device), torch.arange(w, device=device))
-        x_coords = x_coords.flatten()
-        y_coords = y_coords.flatten()
-        z_coords = image.flatten()
 
+
+        x, y = image.shape[1], image.shape[2]
+
+        # 生成坐标
+        indices = torch.arange(x * y, device=device)
+        x_coords = (indices // y).float() 
+        y_coords = (indices % y).float()
+
+        # 生成pointcloud
+        pointcloud = torch.stack([x_coords, y_coords, image.view(-1)], dim=1)
         # 筛选值大于 threshold 的点
-        mask_gt = z_coords > 0.9
-        pointcloud_gt = torch.stack([x_coords[mask_gt], y_coords[mask_gt], z_coords[mask_gt]], dim=1)
+        mask_gt = pointcloud[:, 2] > 0.9
+        pointcloud_gt = pointcloud[mask_gt]
+
 
         # 筛选值小于 threshold 的点
-        mask_lt = z_coords < 0.1
-        pointcloud_lt = torch.stack([x_coords[mask_lt], y_coords[mask_lt], z_coords[mask_lt]], dim=1)
-
+        mask_lt = pointcloud[:, 2] < 0.1
+        pointcloud_lt = pointcloud[mask_lt]
+        # temp = 0
+        # for index in range(0,112):
+        #     temp = temp +image[0,int(pointcloud_lt[index, 0]),int(pointcloud_lt[index, 1])] - pointcloud_lt[index, 2]
+        # print(temp)
+        # temp = 0
+        # for index in range(0,112):
+        #     temp = temp +image[0,int(pointcloud_gt[index, 0]),int(pointcloud_gt[index, 1])] - pointcloud_gt[index, 2]
+        # print(temp)
         return pointcloud_gt, pointcloud_lt
+    #this is wrong,but have a good result, why??
+    # def grayscale_to_pointcloud(image, device):
+    #     _, h, w = image.shape
+    #     y_coords, x_coords = torch.meshgrid(torch.arange(h, device=device), torch.arange(w, device=device))
+    #     x_coords = x_coords.flatten()
+    #     y_coords = y_coords.flatten()
+    #     z_coords = image.flatten()
+
+    #     # 筛选值大于 threshold 的点
+    #     mask_gt = z_coords > 0.9
+    #     pointcloud_gt = torch.stack([x_coords[mask_gt], y_coords[mask_gt], z_coords[mask_gt]], dim=1)
+
+    #     # 筛选值小于 threshold 的点
+    #     mask_lt = z_coords < 0.1
+    #     pointcloud_lt = torch.stack([x_coords[mask_lt], y_coords[mask_lt], z_coords[mask_lt]], dim=1)
+
+    #     return pointcloud_gt, pointcloud_lt
     def sample_points(pointcloud, num_points):
         if pointcloud.shape[0] <= num_points:
             return pointcloud
@@ -107,13 +139,15 @@ def l1_loss_event(network_output, gt, weight=10000):
         return pointcloud_gt_processed, pointcloud_lt_processed
     n_gt,n_lt = grayscale_to_pointcloud(network_output, device=network_output.device)
     g_gt,g_lt = grayscale_to_pointcloud(gt, device=gt.device)
-    n_gt, n_lt = process_pointcloud(n_gt, n_lt, max_points=3000)
-    g_gt, g_lt = process_pointcloud(g_gt, g_lt, max_points=3000)
+    n_gt, n_lt = process_pointcloud(n_gt, n_lt, max_points=9000)
+    g_gt, g_lt = process_pointcloud(g_gt, g_lt, max_points=9000)
 
     # 计算两个点云之间的距离矩阵
     #TODO if no point, skip and give default value
     #give a max number  to avoid exceed GPU
-    torchvision.utils.save_image(gt, "gt.png")
+    # torchvision.utils.save_image(gt, "gt.png")
+    if n_gt.numel() == 0 or g_gt.numel() == 0 or g_lt.numel() == 0 or n_lt.numel() == 0:
+        return l1_loss(network_output, gt)
     distances = torch.cdist(n_gt[:, :2], g_gt[:, :2])
     _, indices = torch.min(distances, dim=1)
     nearest_points = g_gt[indices, :]
