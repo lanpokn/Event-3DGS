@@ -22,6 +22,8 @@ from tqdm import tqdm
 from utils.image_utils import psnr
 from argparse import ArgumentParser, Namespace
 from arguments import ModelParams, PipelineParams, OptimizationParams
+
+import torchvision
 try:
     from torch.utils.tensorboard import SummaryWriter
     TENSORBOARD_FOUND = True
@@ -83,6 +85,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         else:
             index = randint(0, len(viewpoint_stack)-1)
         # viewpoint_cam = viewpoint_stack.pop(index)
+        # index= 0
         viewpoint_cam = viewpoint_stack[index]
         # Render
         if (iteration - 1) == debug_from:
@@ -92,6 +95,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
         render_pkg = render(viewpoint_cam, gaussians, pipe, bg)
         image, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
+        # torchvision.utils.save_image(image, "test.png")
 
         # Loss
         # TODO, change to gray
@@ -108,12 +112,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         # Ll1 = l1_loss(image, gt_image)
         # loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image))
         # loss.backward()
-        if args.gray == True:
-            gt_image = viewpoint_cam.original_image.cuda()
-            Ll1 = l1_loss_gray(image, gt_image)
-            loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim_gray(image, gt_image))
-            loss.backward()
-        elif args.event == True :
+        if args.event == True :
             if index == len(viewpoint_stack):
                 print("exceed error")
             #before it use a pop func, thus that item is nolongger exist
@@ -125,6 +124,11 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             gt_image = viewpoint_cam.original_image.cuda()
             Ll1 = l1_loss(image, gt_image)
             loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image))
+            loss.backward()
+        elif args.gray == True:
+            gt_image = viewpoint_cam.original_image.cuda()
+            Ll1 = l1_loss_gray(image, gt_image)
+            loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim_gray(image, gt_image))
             loss.backward()
         else:
             gt_image = viewpoint_cam.original_image.cuda()
