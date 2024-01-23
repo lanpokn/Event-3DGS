@@ -81,7 +81,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
         # viewpoint_cam = viewpoint_stack.pop(randint(0, len(viewpoint_stack)-1))
         if args.event == True:
-            index = randint(0, len(viewpoint_stack)-2)
+            #TODO, in fact, it's better to be -2
+            index = randint(0, len(viewpoint_stack)-3)
         else:
             index = randint(0, len(viewpoint_stack)-1)
         # viewpoint_cam = viewpoint_stack.pop(index)
