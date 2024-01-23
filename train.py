@@ -12,7 +12,7 @@
 import os
 import torch
 from random import randint
-from utils.loss_utils import l1_loss, ssim,l1_loss_gray,ssim_gray,differentialable_event_simu,Normalize_event_frame
+from utils.loss_utils import l1_loss, ssim,l1_loss_gray,ssim_gray,differentialable_event_simu,Normalize_event_frame,l1_loss_event
 from gaussian_renderer import render, network_gui
 import sys
 from scene import Scene, GaussianModel
@@ -37,7 +37,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     scene = Scene(dataset, gaussians)
     gaussians.training_setup(opt)
     if checkpoint:
-        (model_params, first_iter) = torch.load(checkpoint)
+        (model_params, __) = torch.load(checkpoint)
         gaussians.restore(model_params, opt)
 
     bg_color = [1, 1, 1] if dataset.white_background else [0, 0, 0]
@@ -69,10 +69,9 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         iter_start.record()
 
         gaussians.update_learning_rate(iteration)
-
         # Every 1000 its we increase the levels of SH up to a maximum degree
-        if iteration % 1000 == 0:
-            gaussians.oneupSHdegree()
+        # if iteration % 1000 == 0:
+        #     gaussians.oneupSHdegree()
 
         # Pick a random Camera
         # only copy in first iteration
@@ -122,13 +121,13 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             viewpoint_cam_next = viewpoint_stack[index_next]
             render_pkg_next = render(viewpoint_cam_next, gaussians, pipe, bg)
             image_next = render_pkg_next["render"]
-            img_diff = differentialable_event_simu(viewpoint_cam.original_image.cuda(),viewpoint_cam_next.original_image.cuda())
+            # img_diff = differentialable_event_simu(viewpoint_cam.original_image.cuda(),viewpoint_cam_next.original_image.cuda())
             img_diff = differentialable_event_simu(image,image_next)
             gt_image = viewpoint_cam.original_image.cuda()
             gt_image = Normalize_event_frame(gt_image)
-            # Ll1 = l1_loss(img_diff, gt_image)
+            Ll1 = l1_loss_event(img_diff, gt_image)
             loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(img_diff, gt_image))
-            loss =  Ll1 
+            # loss =  Ll1 
             loss.backward()
         elif args.gray == True:
             gt_image = viewpoint_cam.original_image.cuda()
@@ -253,7 +252,7 @@ if __name__ == "__main__":
     parser.add_argument("--test_iterations", nargs="+", type=int, default=[4_000, 30_000])
     parser.add_argument("--save_iterations", nargs="+", type=int, default=[4_000, 30_000])
     parser.add_argument("--quiet", action="store_true")
-    parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[])
+    parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[2999,4000])
     parser.add_argument("--start_checkpoint", type=str, default = None) 
     
     args = parser.parse_args(sys.argv[1:])

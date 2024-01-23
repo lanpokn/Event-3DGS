@@ -175,7 +175,19 @@ def readColmapSceneInfo(path, images, eval, is_gray = False,is_random = False,ll
     if is_random:
         pcd.colors[:,:] = 0.5
         pcd.normals[:,:] = 0.5
-        pcd.points[:, :] = np.column_stack([np.random.rand(pcd.points.shape[0]), np.random.rand(pcd.points.shape[0]),np.random.rand(pcd.points.shape[0])])
+        # 设置点云的数量
+        num_points = pcd.points.shape[0]
+
+        # 获取点云中每个维度的最小值和最大值
+        min_values = np.min(pcd.points, axis=0)
+        max_values = np.max(pcd.points, axis=0)
+
+        # 生成在范围内浮动的随机数
+        random_points = np.random.uniform(low=min_values, high=max_values, size=(num_points, 3))
+
+        # 将生成的随机点赋值给 pcd.points
+        pcd.points[:, :] = random_points
+        # pcd.points[:, :] = np.column_stack([np.random.rand(pcd.points.shape[0]), np.random.rand(pcd.points.shape[0]),np.random.rand(pcd.points.shape[0])])
 
     #test
     scene_info = SceneInfo(point_cloud=pcd,

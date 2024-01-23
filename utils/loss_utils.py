@@ -14,6 +14,7 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 from math import exp
 import torchvision
+import torchgeometry as tgm
 def rgb_to_grayscale(image):
     # Convert RGB image to grayscale using the formula: Y = 0.299*R + 0.587*G + 0.114*B
     grayscale_image = 0.299 * image[0, :, :] + 0.587 * image[1, :, :] + 0.114 * image[2, :, :]
@@ -35,9 +36,9 @@ def differentialable_threld(x,C=0.3,e=0.00001,w = 10):
 def differentialable_event_simu(image,image_next):
     img1 = rgb_to_grayscale(image)
     img2 = rgb_to_grayscale(image_next)
-    torchvision.utils.save_image(img1, "img1.png")
-    torchvision.utils.save_image(img2, "img2.png")
-    # ##total physical, but not work
+    # torchvision.utils.save_image(img1, "img1.png")
+    # torchvision.utils.save_image(img2, "img2.png")
+    ##total physical, but not work
     # epsilon = 1e-8  # avoid dividing 0
     # img_diff = torch.log(img2) - torch.log(img1)
     # C=0.3
@@ -47,10 +48,10 @@ def differentialable_event_simu(image,image_next):
     # result = (factor1 / factor2 + 1)/2
     # torchvision.utils.save_image(result, "test.png")
 
-    #another way
+    # another way
     epsilon = 1e-8  # avoid dividing 0
     img_diff =(img2) - (img1)
-    C=0.3
+    C=0.03
     w=10
     factor1 = torch.sign(img_diff)
     factor2 = (1 + torch.exp(w * (C - torch.abs(img_diff))))
@@ -62,12 +63,13 @@ def differentialable_event_simu(image,image_next):
 def Normalize_event_frame(gt_image):
     #torch can only be from 0 to 1
     #if both -1,1 is given one of them will become 0
+    #TODO, no 1 only 0.5 and -1, why?
     event_image = torch.full_like(gt_image[0:1, :, :], 0.5)
 
     # positive
-    condition_1 = torch.logical_and(gt_image[0, :, :] > 0.1, gt_image[0, :, :] < 0.9)
+    condition_1 = gt_image[0, :, :] > 0.7
     #negtive
-    condition_2 = torch.logical_and(gt_image[2, :, :] > 0.1, gt_image[2, :, :] < 0.9)
+    condition_2 = gt_image[2, :, :] < 0.2
 
     event_image[0,condition_1] = 1
     event_image[0,condition_2] = 0
@@ -76,7 +78,53 @@ def Normalize_event_frame(gt_image):
 
 def l1_loss(network_output, gt):
     return torch.abs((network_output - gt)).mean()
+def l1_loss_event(network_output, gt, weight=10000):
+    def grayscale_to_pointcloud(image, device):
+        _, h, w = image.shape
+        y_coords, x_coords = torch.meshgrid(torch.arange(h, device=device), torch.arange(w, device=device))
+        x_coords = x_coords.flatten()
+        y_coords = y_coords.flatten()
+        z_coords = image.flatten()
 
+        # 筛选值大于 threshold 的点
+        mask_gt = z_coords > 0.9
+        pointcloud_gt = torch.stack([x_coords[mask_gt], y_coords[mask_gt], z_coords[mask_gt]], dim=1)
+
+        # 筛选值小于 threshold 的点
+        mask_lt = z_coords < 0.1
+        pointcloud_lt = torch.stack([x_coords[mask_lt], y_coords[mask_lt], z_coords[mask_lt]], dim=1)
+
+        return pointcloud_gt, pointcloud_lt
+    def sample_points(pointcloud, num_points):
+        if pointcloud.shape[0] <= num_points:
+            return pointcloud
+        else:
+            indices = torch.randperm(pointcloud.shape[0])[:num_points]
+            return pointcloud[indices]
+    def process_pointcloud(pointcloud_gt, pointcloud_lt, max_points=3000):
+        pointcloud_gt_processed = sample_points(pointcloud_gt, max_points)
+        pointcloud_lt_processed = sample_points(pointcloud_lt, max_points)
+        return pointcloud_gt_processed, pointcloud_lt_processed
+    n_gt,n_lt = grayscale_to_pointcloud(network_output, device=network_output.device)
+    g_gt,g_lt = grayscale_to_pointcloud(gt, device=gt.device)
+    n_gt, n_lt = process_pointcloud(n_gt, n_lt, max_points=3000)
+    g_gt, g_lt = process_pointcloud(g_gt, g_lt, max_points=3000)
+
+    # 计算两个点云之间的距离矩阵
+    #TODO if no point, skip and give default value
+    #give a max number  to avoid exceed GPU
+    torchvision.utils.save_image(gt, "gt.png")
+    distances = torch.cdist(n_gt[:, :2], g_gt[:, :2])
+    _, indices = torch.min(distances, dim=1)
+    nearest_points = g_gt[indices, :]
+    distances1 = torch.norm(n_gt[:, :2] - nearest_points[:, :2], dim=1).mean()
+
+    distances = torch.cdist(n_lt[:, :2], g_lt[:, :2])
+    _, indices = torch.min(distances, dim=1)
+    nearest_points = g_lt[indices, :]
+    distances2 = torch.norm(n_lt[:, :2] - nearest_points[:, :2], dim=1).mean()
+
+    return distances1+distances2
 def l2_loss(network_output, gt):
     return ((network_output - gt) ** 2).mean()
 
