@@ -26,6 +26,9 @@ from Event_sensor.event_tools import *
 import copy
 from Event_sensor.src.event_buffer import EventBuffer
 from utils.graphics_utils import getWorld2View2, getProjectionMatrix
+
+
+
 def Nlerp(a1,a2,alpha):
     return alpha * a1 + (1 - alpha) *a2
 def render_set(model_path, name, iteration, views, gaussians, pipeline, background):
@@ -164,7 +167,7 @@ def render_set_event(model_path, name, iteration, views, gaussians, pipeline, ba
     makedirs(gts_path, exist_ok=True)
     makedirs(event_path, exist_ok=True)
     img_list = []
-    interpolation_number = 3
+    interpolation_number = args.interpolationN
     for idx, view in enumerate(tqdm(views, desc="Rendering progress")):
         rendering = render(view, gaussians, pipeline, background)["render"]
         gt = view.original_image[0:3, :, :]
@@ -198,7 +201,7 @@ def render_set_event(model_path, name, iteration, views, gaussians, pipeline, ba
             # Create a temporary view
             view_temp = Generate_new_view(view,R_temp,T_temp)
             rendering = render(view_temp, gaussians, pipeline, background)["render"]
-            torchvision.utils.save_image(rendering, os.path.join(render_path, '{0:05d}'.format(idx*interpolation_number+i) + "po.png"))
+            torchvision.utils.save_image(rendering, os.path.join(render_path, '{0:05d}'.format(idx*interpolation_number+i) + ".png"))
             opencv_image = rendering_to_cvimg(rendering)
             img_list.append(opencv_image)
     ev_full = EventBuffer(1)
@@ -207,7 +210,7 @@ def render_set_event(model_path, name, iteration, views, gaussians, pipeline, ba
     simulate_event_camera(img_list,ev_full,2857)
     print("saving ...")
     save_event_result(ev_full,event_path)
-    generate_images(event_path,dt,maxLoopN*interpolation_number,img_list[0].shape[1],img_list[0].shape[0])
+    generate_images(event_path,dt,(maxLoopN+1)*interpolation_number,img_list[0].shape[1],img_list[0].shape[0])
 
     if old_event == True:
         ev_full_old = EventBuffer(1)
@@ -388,6 +391,7 @@ def render_sets_mixed(dataset: ModelParams, iteration: int, pipeline: PipelinePa
 if __name__ == "__main__":
     # Set up command line argument parser
     parser = ArgumentParser(description="Testing script parameters")
+    # model = ModelParams(parser, sentinel=True)
     model = ModelParams(parser, sentinel=True)
     pipeline = PipelineParams(parser)
     parser.add_argument("--iteration", default=-1, type=int)
@@ -397,6 +401,7 @@ if __name__ == "__main__":
     parser.add_argument("--maxLoopN", default=-1, type=int)
     parser.add_argument("--old_event", action="store_true")
     parser.add_argument("--blurrySpeed", default=-1, type=float)
+    parser.add_argument("--interpolationN", default=3, type=int)
     parser.add_argument("--point", action="store_true")
     parser.add_argument("--depth", action="store_true")
     args = get_combined_args(parser)
