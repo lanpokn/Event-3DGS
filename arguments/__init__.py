@@ -56,6 +56,7 @@ class ModelParams(ParamGroup):
         self.eval = False
         self.gray = False
         self.random = False
+        self.event = False
         super().__init__(parser, "Loading Parameters", sentinel)
 
     def extract(self, args):

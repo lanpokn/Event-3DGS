@@ -101,11 +101,22 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         # Ll1 = l1_loss(image, gt_image)
         # loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image))
         # loss.backward()
+        if args.gray == True:
+            gt_image = viewpoint_cam.original_image.cuda()
+            Ll1 = l1_loss_gray(image, gt_image)
+            loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim_gray(image, gt_image))
+            loss.backward()
+        elif args.event == True :
+            gt_image = viewpoint_cam.original_image.cuda()
+            Ll1 = l1_loss(image, gt_image)
+            loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image))
+            loss.backward()
+        else:
+            gt_image = viewpoint_cam.original_image.cuda()
+            Ll1 = l1_loss(image, gt_image)
+            loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image))
+            loss.backward()
 
-        gt_image = viewpoint_cam.original_image.cuda()
-        Ll1 = l1_loss_gray(image, gt_image)
-        loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim_gray(image, gt_image))
-        loss.backward()
 
         iter_end.record()
 
