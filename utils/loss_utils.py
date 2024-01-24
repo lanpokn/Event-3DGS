@@ -58,7 +58,7 @@ def differentialable_event_simu(image,image_next):
     # factor1 = torch.sign(img_diff)
     # factor2 = (1 + torch.exp(w * (C - torch.abs(img_diff))))
     # result = (factor1 / factor2 + 1)/2
-    torchvision.utils.save_image(img_diff.float(), "img_diff.png")
+    # torchvision.utils.save_image(img_diff.float(), "img_diff.png")
 
     return img_diff
 
@@ -78,7 +78,7 @@ def Normalize_event_frame(gt_image):
 
     # event_image[0,condition_1] = 1
     # event_image[0,condition_2] = 0
-    torchvision.utils.save_image(event_image.float(), "event_image.png")
+    # torchvision.utils.save_image(event_image.float(), "event_image.png")
     return event_image.unsqueeze(0)
 
 
@@ -88,7 +88,7 @@ def l1_loss_event_new(network_output, gt, tolerance=0.2):
     # 计算差的绝对值
     abs_diff = torch.abs(network_output - gt)
     abs_diff = abs_diff
-    torchvision.utils.save_image(abs_diff, "abs_diff.png")
+    # torchvision.utils.save_image(abs_diff, "abs_diff.png")
     # 计算每个像素上的损失
     pixel_loss = torch.where(abs_diff < tolerance, torch.tensor(0.0), ((abs_diff - tolerance)*1000).pow(2))
 

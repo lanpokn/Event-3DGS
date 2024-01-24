@@ -60,7 +60,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 if custom_cam != None:
                     net_image = render(custom_cam, gaussians, pipe, background, scaling_modifer)["render"]
                     ##may need to multi higher
-                    net_image = net_image*10
+                    net_image = net_image
                     net_image_bytes = memoryview((torch.clamp(net_image, min=0, max=1.0) * 255).byte().permute(1, 2, 0).contiguous().cpu().numpy())
                 network_gui.send(net_image_bytes, dataset.source_path)
                 if do_training and ((iteration < int(opt.iterations)) or not keep_alive):
@@ -130,8 +130,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             gt_image = Normalize_event_frame(gt_image)
             Ll1 = l1_loss_event(img_diff, gt_image)
             # opt.lambda_dssim = 0.999
-            # loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(img_diff, gt_image))
-            loss =  Ll1 
+            loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(img_diff, gt_image))
+            # loss =  Ll1 
             loss.backward()
         elif args.gray == True:
             gt_image = viewpoint_cam.original_image.cuda()
@@ -255,8 +255,8 @@ if __name__ == "__main__":
     parser.add_argument('--port', type=int, default=6009)
     parser.add_argument('--debug_from', type=int, default=-1)
     parser.add_argument('--detect_anomaly', action='store_true', default=False)
-    parser.add_argument("--test_iterations", nargs="+", type=int, default=[2_999, 4_000])
-    parser.add_argument("--save_iterations", nargs="+", type=int, default=[2_999, 4_000])
+    parser.add_argument("--test_iterations", nargs="+", type=int, default=[2_999, 3_999])
+    parser.add_argument("--save_iterations", nargs="+", type=int, default=[2_999, 3_999])
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[2999,4000])
     parser.add_argument("--start_checkpoint", type=str, default = None) 
