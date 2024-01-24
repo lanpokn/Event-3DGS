@@ -40,9 +40,9 @@ def differentialable_event_simu(image,image_next):
     # torchvision.utils.save_image(img1, "img1.png")
     # torchvision.utils.save_image(img2, "img2.png")
     #total physical, but not work
-    # epsilon = 1e-8  # avoid dividing 0
+    epsilon = 1e-8  # avoid dividing 0
     C=0.3
-    img_diff = (torch.log(img2) - torch.log(img1))/C
+    img_diff = (torch.log(img2+epsilon) - torch.log(img1+epsilon))/C
     # C=0.3
     # w=10
     # factor1 = torch.sign(img_diff)
@@ -58,7 +58,7 @@ def differentialable_event_simu(image,image_next):
     # factor1 = torch.sign(img_diff)
     # factor2 = (1 + torch.exp(w * (C - torch.abs(img_diff))))
     # result = (factor1 / factor2 + 1)/2
-    # torchvision.utils.save_image(result, "test.png")
+    torchvision.utils.save_image(img_diff.float(), "img_diff.png")
 
     return img_diff
 
@@ -69,8 +69,8 @@ def Normalize_event_frame(gt_image):
     #TODO, no 1 only 0.5 and -1, why?
     # event_image = torch.full_like(gt_image[0:1, :, :], 0.5)
     # 计算新的 event_image
-    assert gt_image.shape[2] == 3, "Input image must have three channels"
-    event_image = (gt_image[:, :, 0] - gt_image[:, :, 2]) / (10 / 255)
+    assert gt_image.shape[0] == 3, "Input image must have three channels"
+    event_image = (gt_image[0,:, :] - gt_image[2,:, :]) / (10 / 255)
     # # positive
     # condition_1 = gt_image[0, :, :] > 0.7
     # #negtive
@@ -78,14 +78,26 @@ def Normalize_event_frame(gt_image):
 
     # event_image[0,condition_1] = 1
     # event_image[0,condition_2] = 0
-    # torchvision.utils.save_image(event_image, "test.png")
-    return event_image
+    torchvision.utils.save_image(event_image.float(), "event_image.png")
+    return event_image.unsqueeze(0)
 
 
 def l1_loss(network_output, gt):
     return torch.abs((network_output - gt)).mean()
+def l1_loss_event_new(network_output, gt, tolerance=0.2):
+    # 计算差的绝对值
+    abs_diff = torch.abs(network_output - gt)
+    abs_diff = abs_diff
+    torchvision.utils.save_image(abs_diff, "abs_diff.png")
+    # 计算每个像素上的损失
+    pixel_loss = torch.where(abs_diff < tolerance, torch.tensor(0.0), ((abs_diff - tolerance)*1000).pow(2))
+
+    # 计算平均损失
+    average_loss = pixel_loss.mean()
+
+    return average_loss
 def l1_loss_event(network_output, gt, weight=10000):
-    def grayscale_to_pointcloud(image, device):
+    def grayscale_to_pointcloud(image,network,device):
 
 
         x, y = image.shape[1], image.shape[2]
@@ -97,23 +109,16 @@ def l1_loss_event(network_output, gt, weight=10000):
 
         # 生成pointcloud
         pointcloud = torch.stack([x_coords, y_coords, image.view(-1)], dim=1)
+        pointcloud_work = torch.stack([x_coords, y_coords, network.view(-1)], dim=1)
         # 筛选值大于 threshold 的点
         mask_gt = pointcloud[:, 2] > 0.9
         pointcloud_gt = pointcloud[mask_gt]
-
-
-        # 筛选值小于 threshold 的点
-        mask_lt = pointcloud[:, 2] < 0.1
+        pointcloud_network_gt = pointcloud_work[mask_gt]
+        mask_lt = pointcloud[:, 2] < -0.9
         pointcloud_lt = pointcloud[mask_lt]
-        # temp = 0
-        # for index in range(0,112):
-        #     temp = temp +image[0,int(pointcloud_lt[index, 0]),int(pointcloud_lt[index, 1])] - pointcloud_lt[index, 2]
-        # print(temp)
-        # temp = 0
-        # for index in range(0,112):
-        #     temp = temp +image[0,int(pointcloud_gt[index, 0]),int(pointcloud_gt[index, 1])] - pointcloud_gt[index, 2]
-        # print(temp)
-        return pointcloud_gt, pointcloud_lt
+        pointcloud_network_lt = pointcloud_work[mask_lt]
+
+        return pointcloud_gt, pointcloud_lt,pointcloud_network_gt,pointcloud_network_lt
     #this is wrong,but have a good result, why??
     # def grayscale_to_pointcloud(image, device):
     #     _, h, w = image.shape
@@ -141,8 +146,8 @@ def l1_loss_event(network_output, gt, weight=10000):
         pointcloud_gt_processed = sample_points(pointcloud_gt, max_points)
         pointcloud_lt_processed = sample_points(pointcloud_lt, max_points)
         return pointcloud_gt_processed, pointcloud_lt_processed
-    n_gt,n_lt = grayscale_to_pointcloud(network_output, device=network_output.device)
-    g_gt,g_lt = grayscale_to_pointcloud(gt, device=gt.device)
+    # n_gt,n_lt = grayscale_to_pointcloud(network_output, device=network_output.device)
+    g_gt,g_lt,n_gt,n_lt = grayscale_to_pointcloud(gt,network_output,device=gt.device)
     n_gt, n_lt = process_pointcloud(n_gt, n_lt, max_points=9000)
     g_gt, g_lt = process_pointcloud(g_gt, g_lt, max_points=9000)
 
