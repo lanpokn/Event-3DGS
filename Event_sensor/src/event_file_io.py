@@ -287,6 +287,27 @@ class EventsData:
             img[events_filtered['y'][OFF_index], events_filtered['x'][OFF_index], :] = [200, 30, 30] * (events_filtered['p'][OFF_index] + 1)[:, None]  # green [0, 255, 0], blue [255, 0, 0]
         
         return img
+    def display_events_accumu(self, events, t_begin, t_end, width=1280, height=720):
+        img = np.zeros((height, width, 3), dtype=np.uint8)
+
+        events_filtered = events[(events['t'] >= t_begin) & (events['t'] <= t_end)]  # Filter events based on time
+
+        # 将 events_filtered['x'], events_filtered['y'] 转换为整数类型
+        x_values = events_filtered['x'].astype(int)
+        y_values = events_filtered['y'].astype(int)
+
+        # 创建一个零矩阵，用于存储 on 和 off 的数量
+        on_count = np.zeros((height, width), dtype=np.uint8)
+        off_count = np.zeros((height, width), dtype=np.uint8)
+
+        # 计算 on 和 off 的数量
+        np.add.at(on_count, (y_values, x_values), (events_filtered['p'] == 1))
+        np.add.at(off_count, (y_values, x_values), (events_filtered['p'] == 0))
+
+        img[:, :, 2] = on_count*10  # Store on counts in the third channel
+        img[:, :, 0] = off_count*10  # Store off counts in the first channel
+
+        return img
     def generate_video(self, events, t_begin, t_end, dt=2857*2,video_name = "default",cycles = 1,width=1280, height=720):
         fourcc = cv2.VideoWriter_fourcc(*'H264')  # Define codec for video writer
         video = cv2.VideoWriter(video_name, fourcc, 30, (width, height))  # Create video writer object

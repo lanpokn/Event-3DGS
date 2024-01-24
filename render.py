@@ -159,6 +159,7 @@ def render_set_event(model_path, name, iteration, views, gaussians, pipeline, ba
     render_path = os.path.join(model_path, name, "ours_{}".format(iteration), "renders")
     gts_path = os.path.join(model_path, name, "ours_{}".format(iteration), "gt")
     event_path = os.path.join(model_path, name, "ours_{}".format(iteration), "event")
+    event_ac_path = os.path.join(model_path, name, "ours_{}".format(iteration), "event_ac")
     if old_event == True:
         event_old_path = os.path.join(model_path, name, "ours_{}".format(iteration), "event_old")
         makedirs(event_old_path, exist_ok=True)
@@ -166,6 +167,7 @@ def render_set_event(model_path, name, iteration, views, gaussians, pipeline, ba
     makedirs(render_path, exist_ok=True)
     makedirs(gts_path, exist_ok=True)
     makedirs(event_path, exist_ok=True)
+    makedirs(event_ac_path, exist_ok=True)
     img_list = []
     interpolation_number = args.interpolationN
     for idx, view in enumerate(tqdm(views, desc="Rendering progress")):
@@ -210,7 +212,8 @@ def render_set_event(model_path, name, iteration, views, gaussians, pipeline, ba
     simulate_event_camera(img_list,ev_full,2857)
     print("saving ...")
     save_event_result(ev_full,event_path)
-    generate_images(event_path,dt,(maxLoopN+1)*interpolation_number,img_list[0].shape[1],img_list[0].shape[0])
+    # generate_images(event_path,dt,(maxLoopN+1)*interpolation_number,img_list[0].shape[1],img_list[0].shape[0])
+    generate_images_accumu(event_path,dt,(maxLoopN+1)*interpolation_number,img_list[0].shape[1],img_list[0].shape[0])
 
     if old_event == True:
         ev_full_old = EventBuffer(1)

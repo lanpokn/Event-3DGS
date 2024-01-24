@@ -72,7 +72,6 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         # Every 1000 its we increase the levels of SH up to a maximum degree
         if iteration % 1000 == 0:
             gaussians.oneupSHdegree()
-
         # Pick a random Camera
         # only copy in first iteration
         if not viewpoint_stack:
@@ -81,9 +80,11 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         # viewpoint_cam = viewpoint_stack.pop(randint(0, len(viewpoint_stack)-1))
         if args.event == True:
             #TODO, in fact, it's better to be -2
+            #index = randint(0, len(viewpoint_stack)-2)
             index = randint(0, len(viewpoint_stack)-3)
         else:
-            index = randint(0, len(viewpoint_stack)-1)
+            # index = randint(0, len(viewpoint_stack)-1)
+            index = randint(0, len(viewpoint_stack)-2)
         # viewpoint_cam = viewpoint_stack.pop(index)
         # index= 0
         viewpoint_cam = viewpoint_stack[index]
@@ -131,6 +132,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             loss.backward()
         elif args.gray == True:
             gt_image = viewpoint_cam.original_image.cuda()
+            ##TODO hyper parameter
+            gt_image = gt_image*3.5
             Ll1 = l1_loss_gray(image, gt_image)
             loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim_gray(image, gt_image))
             loss.backward()

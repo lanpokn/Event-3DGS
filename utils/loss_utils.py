@@ -34,18 +34,20 @@ def differentialable_threld(x,C=0.3,e=0.00001,w = 10):
     torch.sign(x)/(1 + torch.exp(w*(C - torch.abs(x))))
 
 def differentialable_event_simu(image,image_next):
+    #return event number! img_diff can be negtive
     img1 = rgb_to_grayscale(image)
     img2 = rgb_to_grayscale(image_next)
     # torchvision.utils.save_image(img1, "img1.png")
     # torchvision.utils.save_image(img2, "img2.png")
     #total physical, but not work
     # epsilon = 1e-8  # avoid dividing 0
-    img_diff = torch.log(img2) - torch.log(img1)
     C=0.3
-    w=10
-    factor1 = torch.sign(img_diff)
-    factor2 = (1 + torch.exp(w * (C - torch.abs(img_diff))))
-    result = (factor1 / factor2 + 1)/2
+    img_diff = (torch.log(img2) - torch.log(img1))/C
+    # C=0.3
+    # w=10
+    # factor1 = torch.sign(img_diff)
+    # factor2 = (1 + torch.exp(w * (C - torch.abs(img_diff))))
+    # result = (factor1 / factor2 + 1)/2
     # torchvision.utils.save_image(result, "test.png")
 
     # another way
@@ -58,22 +60,24 @@ def differentialable_event_simu(image,image_next):
     # result = (factor1 / factor2 + 1)/2
     # torchvision.utils.save_image(result, "test.png")
 
-    return result
+    return img_diff
 
 
 def Normalize_event_frame(gt_image):
     #torch can only be from 0 to 1
     #if both -1,1 is given one of them will become 0
     #TODO, no 1 only 0.5 and -1, why?
-    event_image = torch.full_like(gt_image[0:1, :, :], 0.5)
+    # event_image = torch.full_like(gt_image[0:1, :, :], 0.5)
+    # 计算新的 event_image
+    assert gt_image.shape[2] == 3, "Input image must have three channels"
+    event_image = (gt_image[:, :, 0] - gt_image[:, :, 2]) / (10 / 255)
+    # # positive
+    # condition_1 = gt_image[0, :, :] > 0.7
+    # #negtive
+    # condition_2 = gt_image[2, :, :] < 0.2
 
-    # positive
-    condition_1 = gt_image[0, :, :] > 0.7
-    #negtive
-    condition_2 = gt_image[2, :, :] < 0.2
-
-    event_image[0,condition_1] = 1
-    event_image[0,condition_2] = 0
+    # event_image[0,condition_1] = 1
+    # event_image[0,condition_2] = 0
     # torchvision.utils.save_image(event_image, "test.png")
     return event_image
 

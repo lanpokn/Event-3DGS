@@ -66,3 +66,10 @@ def generate_images(event_path,dt, total_dt_nums,width, height):
     for idx in range(0,total_dt_nums):
         img = events_data.display_events(ev_data,dt*idx,dt*(idx+1),width, height)
         cv2.imwrite(os.path.join(event_path, '{0:05d}'.format(idx) + ".png"), img)
+def generate_images_accumu(event_path,dt, total_dt_nums,width, height):
+    events_data = EventsData()
+    events_data.read_IEBCS_events(os.path.join(event_path,"raw.dat"), (total_dt_nums+1)*dt)
+    ev_data = events_data.events[0]
+    for idx in range(0,total_dt_nums):
+        img = events_data.display_events_accumu(ev_data,dt*idx,dt*(idx+1),width, height)
+        cv2.imwrite(os.path.join(event_path+"_ac", '{0:05d}'.format(idx) + ".png"), img)
