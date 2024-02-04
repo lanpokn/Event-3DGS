@@ -128,10 +128,11 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             img_diff = differentialable_event_simu(image,image_next)
             gt_image = viewpoint_cam.original_image.cuda()
             gt_image = Normalize_event_frame(gt_image)
-            Ll1 = l1_loss_event(img_diff, gt_image)
+            # Ll1 = l1_loss_event(img_diff, gt_image)
             # opt.lambda_dssim = 0.999
-            loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(img_diff, gt_image))
-            # loss =  Ll1 
+            # loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(img_diff, gt_image))
+            Ll1 = 1.0 - ssim(img_diff, gt_image)
+            loss =  Ll1 
             loss.backward()
         elif args.gray == True:
             gt_image = viewpoint_cam.original_image.cuda()
@@ -256,9 +257,9 @@ if __name__ == "__main__":
     parser.add_argument('--debug_from', type=int, default=-1)
     parser.add_argument('--detect_anomaly', action='store_true', default=False)
     parser.add_argument("--test_iterations", nargs="+", type=int, default=[2_999, 3_999])
-    parser.add_argument("--save_iterations", nargs="+", type=int, default=[2_999, 3_999])
+    parser.add_argument("--save_iterations", nargs="+", type=int, default=[999,1999,2_999, 3_999])
     parser.add_argument("--quiet", action="store_true")
-    parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[2999,4000])
+    parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[999,1999,2999,4000])
     parser.add_argument("--start_checkpoint", type=str, default = None) 
     
     args = parser.parse_args(sys.argv[1:])

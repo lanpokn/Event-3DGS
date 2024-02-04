@@ -21,22 +21,6 @@ from typing import List
 
 import struct
 
-from metavision_core.event_io import DatWriter
-
-
-def write_meta_dat(filename, ts, x, y, pol, width=None, height=None):
-    if width is None:
-        width = np.max(x) + 1
-    if height is None:
-        height = np.max(y) + 1
-    # Combine ts, x, y, and pol into a structured NumPy array
-    events_data = np.array(list(zip(ts, x, y, pol)), dtype=[('t', '<u4'), ('x', '<u2'), ('y', '<u2'), ('p', 'u1')])
-
-    # Create an instance of H5EventsWriter
-    Writer =  DatWriter(filename, height=height, width=width)
-    # Write events to the HDF5 file
-    Writer.write(events_data)
-
 def load_dat_event(filename, start=0, stop=-1, display=False):
     """ Load .dat event.
         Warning: only tested on the VGA sensor on V2 Prophesee event
@@ -253,60 +237,6 @@ class EventsData:
         evs['t'] = evs['t'] - self.global_min_t
         self.global_max_t = self.global_max_t - self.global_min_t
         self.global_min_t = 0
-    def read_Volt_events(self, input_path: str, delta_t_input: int):
-        # max size: 5000000, if you need more, delete that code
-        with open(input_path, 'r') as file:
-            lines = file.readlines()
-
-        ts, x, y, p = [], [], [], []
-        i = 0
-        for line in lines:
-            if line.startswith('#') or line.startswith('('):
-                continue
-            values = line.strip().split()
-            ts.append(int(float(values[0])))
-            x.append(int(values[1]))
-            y.append(int(values[2]))
-            p.append(int(values[3]))
-            i=i+1
-            if i>5000000:
-                break
-
-        self.delta_t = delta_t_input
-        self.height = np.max(y) + 1
-        self.width = np.max(x) + 1
-        start_time = ts[0]
-        end_time = ts[-1]
-        time_duration = end_time - start_time
-        num_buffers = time_duration // delta_t_input
-
-        for i in range(num_buffers):
-            start_idx = np.searchsorted(ts, start_time + i * delta_t_input)
-            end_idx = np.searchsorted(ts, start_time + (i + 1) * delta_t_input, side='right')
-            evs = np.zeros(end_idx - start_idx, dtype=np.dtype({'names': ['x', 'y', 'p', 't'], 'formats': ['<u2', '<u2', '<i2', '<i8'], 'offsets': [0, 2, 4, 8], 'itemsize': 16}))
-            evs['x'] = x[start_idx:end_idx]
-            evs['y'] = y[start_idx:end_idx]
-            evs['t'] = ts[start_idx:end_idx]
-            evs['p'] = p[start_idx:end_idx]
-            self.events.append(evs)
-            self.global_counter += evs.size
-
-        remaining_events = ts[np.searchsorted(ts, start_time + num_buffers * delta_t_input):]
-        if len(remaining_events) > 0:
-            evs = np.zeros(len(remaining_events), dtype=np.dtype({'names': ['x', 'y', 'p', 't'], 'formats': ['<u2', '<u2', '<i2', '<i8'], 'offsets': [0, 2, 4, 8], 'itemsize': 16}))
-            evs['x'] = x[np.searchsorted(ts, start_time + num_buffers * delta_t_input):]
-            evs['y'] = y[np.searchsorted(ts, start_time + num_buffers * delta_t_input):]
-            evs['t'] = ts[np.searchsorted(ts, start_time + num_buffers * delta_t_input):]
-            evs['p'] = p[np.searchsorted(ts, start_time + num_buffers * delta_t_input):]
-            self.events.append(evs)
-            self.global_counter += len(evs)
-
-        if self.global_min_t == -1:
-            self.global_min_t = ts[0]
-        self.global_max_t = ts[-1]
-        evs['t'] = evs['t'] - self.global_min_t
-        self.global_max_t = self.global_max_t - self.global_min_t
-        self.global_min_t = 0
 
     def display_events_metavision(self,evs,accumulation_time_us):
         # Window - Graphical User Interface
@@ -341,38 +271,42 @@ class EventsData:
             
             # if window.should_close():
             #     break
-    def display_events(self,events,t_begin,t_end,downsample = True,width=1280, height=720):
+    def display_events(self,events,t_begin,t_end,width=1280, height=720):
         img = 255 * np.ones((height, width, 3), dtype=np.uint8)
-
-        events_filtered = events[(events['t'] >= t_begin) & (events['t'] <= t_end)]
-        # events_filtered = events[(events['t'] >= t_begin) & (events['t'] <= t_end) & ((events['t'] <= 40000) | (events['t'] >= 41000)) & ((events['t'] <= 43000) | (events['t'] >= 45800))]  # Filter events based on time
+        
+        events_filtered = events[(events['t'] >= t_begin) & (events['t'] <= t_end)]  # Filter events based on time
+        
         if events_filtered.size:
             assert events_filtered['x'].max() < width, "out of bound events: x = {}, w = {}".format(events_filtered['x'].max(), width)
             assert events_filtered['y'].max() < height, "out of bound events: y = {}, h = {}".format(events_filtered['y'].max(), height)
             
             ON_index = np.where(events_filtered['p'] == 1)
-            img[events_filtered['y'][ON_index], events_filtered['x'][ON_index], :] = [30, 30, 220] * events_filtered['p'][ON_index][:, None]  # red [0, 0, 255]
+            img[events_filtered['y'][ON_index], events_filtered['x'][ON_index], :] = [30, 30, 220] * events_filtered['p'][ON_index][:, None]  # red [0, 0, 255]#bgr
             
             OFF_index = np.where(events_filtered['p'] == 0)
             img[events_filtered['y'][OFF_index], events_filtered['x'][OFF_index], :] = [200, 30, 30] * (events_filtered['p'][OFF_index] + 1)[:, None]  # green [0, 255, 0], blue [255, 0, 0]
-        if downsample == True:
-            loop = 180*6
-            for looptime in  range(0,loop):
-                index_x = np.arange(0,height)
-                index_x = np.random.choice(index_x,10,replace=True) 
-                for i in index_x:
-                    index_y = np.arange(0,width)
-                    index_y = np.random.choice(index_y,10,replace=True)
-                    for j in index_y:
-                        img[i,j] = [255,255,255]
-                index_y = np.arange(0,width)
-                index_y = np.random.choice(index_y,10,replace=True) 
-                for i in index_y:
-                    index_x = np.arange(0,height)
-                    index_x = np.random.choice(index_x,10,replace=True)
-                    for j in index_x:
-                        img[j,i] = [255,255,255]
-                        index_x = np.arange(0,height)
+        
+        return img
+    def display_events_accumu(self, events, t_begin, t_end, width=1280, height=720):
+        img = np.zeros((height, width, 3), dtype=np.uint8)
+
+        events_filtered = events[(events['t'] >= t_begin) & (events['t'] <= t_end)]  # Filter events based on time
+
+        # 将 events_filtered['x'], events_filtered['y'] 转换为整数类型
+        x_values = events_filtered['x'].astype(int)
+        y_values = events_filtered['y'].astype(int)
+
+        # 创建一个零矩阵，用于存储 on 和 off 的数量
+        on_count = np.zeros((height, width), dtype=np.uint8)
+        off_count = np.zeros((height, width), dtype=np.uint8)
+
+        # 计算 on 和 off 的数量
+        np.add.at(on_count, (y_values, x_values), (events_filtered['p'] == 1))
+        np.add.at(off_count, (y_values, x_values), (events_filtered['p'] == 0))
+
+        img[:, :, 2] = on_count*10  # Store on counts in the third channel
+        img[:, :, 0] = off_count*10  # Store off counts in the first channel
+
         return img
     def generate_video(self, events, t_begin, t_end, dt=2857*2,video_name = "default",cycles = 1,width=1280, height=720):
         fourcc = cv2.VideoWriter_fourcc(*'H264')  # Define codec for video writer
@@ -478,23 +412,6 @@ class EventsData:
 
 def main():
     events_data = EventsData()
-    # events_data.read_real_events("C:/Users/admin/Documents/metavision/recordings/output1.hdf5",1000)
-    events_data.read_IEBCS_events("D:/2023/计算成像与仿真/my_pbrt/IEBCS-main/ev_100_10_100_300_0.3_0.01.dat",10000)
-    for ev_data in events_data.events:
-        print("----- New event buffer! -----")
-        counter = ev_data.size
-        min_t = ev_data['t'][0]
-        max_t = ev_data['t'][-1]
-        print(f"There were {counter} events in this event buffer.")
-        print(f"There were {events_data.global_counter} total events up to now.")
-        print(f"The current event buffer included events from {min_t} to {max_t} microseconds.")
-        print("----- End of the event buffer! -----")
-
-    duration_seconds = events_data.global_max_t / 1.0e6
-    print(f"There were {events_data.global_counter} events in total.")
-    print(f"The total duration was {duration_seconds:.2f} seconds.")
-    if duration_seconds >= 1:
-        print(f"There were {events_data.global_counter / duration_seconds:.2f} events per second on average.")
 
 
 if __name__ == "__main__":

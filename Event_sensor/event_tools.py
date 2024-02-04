@@ -13,6 +13,7 @@ from src.event_file_io import EventsData
 import os
 from tqdm import tqdm
 from src.event_display import EventDisplay
+from src.example_EXR_to_events import View_3D
 def rotation_matrix_to_quaternion(rotation_matrix):
     # 使用scipy的Rotation类来将旋转矩阵转换为四元数
     r = Rotation.from_matrix(rotation_matrix)
@@ -70,6 +71,10 @@ def generate_images_accumu(event_path,dt, total_dt_nums,width, height):
     events_data = EventsData()
     events_data.read_IEBCS_events(os.path.join(event_path,"raw.dat"), (total_dt_nums+1)*dt)
     ev_data = events_data.events[0]
+
+    point_cloud = events_data.display_events_3D(ev_data,0,5000)
+    View_3D(point_cloud)
+    
     for idx in range(0,total_dt_nums):
         img = events_data.display_events_accumu(ev_data,dt*idx,dt*(idx+1),width, height)
         cv2.imwrite(os.path.join(event_path+"_ac", '{0:05d}'.format(idx) + ".png"), img)

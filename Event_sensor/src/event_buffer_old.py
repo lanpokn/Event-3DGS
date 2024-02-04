@@ -1,8 +1,8 @@
-# Damien JOUBERT 17-01-2020
+# from ICNS
 import numpy as np
 import os.path
 from dat_files import write_event_dat, write_event_csv, load_dat_event
-from event_file_io import write_meta_dat
+
 
 class EventBuffer():
     """ Structure to handle a buffer of dvs events """
@@ -233,12 +233,9 @@ class EventBuffer():
 
         ext = os.path.splitext(filename)[1]
         if ext == '.dat':
-            # write_event_dat(filename, self.ts[:self.i], self.x[:self.i],
-            #                 self.y[:self.i], self.p[:self.i],
-            #                 event_type=event_type, width=width, height=height)
-            write_meta_dat(filename, self.ts[:self.i], self.x[:self.i],
+            write_event_dat(filename, self.ts[:self.i], self.x[:self.i],
                             self.y[:self.i], self.p[:self.i],
-                            width=width, height=height)
+                            event_type=event_type, width=width, height=height)
         # elif ext == '.es':
         #     write_event_es(filename, self.ts[:self.i], self.x[:self.i],
         #                    self.y[:self.i], self.p[:self.i],
@@ -246,7 +243,3 @@ class EventBuffer():
         elif ext == '.csv':
             write_event_csv(filename, self.ts[:self.i], self.x[:self.i],
                             self.y[:self.i], self.p[:self.i])
-        elif ext == ".h5" or ext == ".hdf5":
-            write_event_hdf5(filename, self.ts[:self.i], self.x[:self.i],
-                          self.y[:self.i], self.p[:self.i], width, height)
-

@@ -16,7 +16,7 @@ from scene import Scene
 import os
 from tqdm import tqdm
 from os import makedirs
-from gaussian_renderer import render, render_point
+from gaussian_renderer import render, render_point,render_depth
 import torchvision
 from utils.general_utils import safe_state
 from argparse import ArgumentParser
@@ -242,6 +242,7 @@ def render_set_blurry(model_path, name, iteration, views, gaussians, pipeline, b
     #bigger inter number, better in realism of blurry
     interpolation_number = 20
     for idx, view in enumerate(tqdm(views, desc="Rendering progress")):
+        #skip no blurry img
         rendering = render(view, gaussians, pipeline, background)["render"]
         gt = view.original_image[0:3, :, :]
         opencv_image = rendering_to_cvimg(rendering)
@@ -259,9 +260,13 @@ def render_set_blurry(model_path, name, iteration, views, gaussians, pipeline, b
         q_end = Nlerp(q_iplus1,q_i,alpha_blurry)
         q_end = q_end/np.linalg.norm(q_end)
         T_end = Nlerp(T_iplus1,T_i,alpha_blurry)
+        #if first img then use twice time after first
         if idx == 0:
             q_start = q_i
             T_start = T_i
+            q_end = Nlerp(q_iplus1,q_i,alpha_blurry*2)
+            q_end = q_end/np.linalg.norm(q_end)
+            T_end = Nlerp(T_iplus1,T_i,alpha_blurry*2)
         else:
             view_previous = views[idx-1]
             q_iminus1 = rotation_matrix_to_quaternion(view_previous.R)
@@ -311,6 +316,9 @@ def render_set_point(model_path, name, iteration, views, gaussians, pipeline, ba
         save_path = os.path.join(point_path, '{0:05d}_min{1:.4f}_max{2:.4f}.png'.format(idx, min_val.item(), max_val.item()))
         torchvision.utils.save_image(point_map_float,save_path)
 
+## get idea from:
+#Depth-Regularized Optimization for 3D Gaussian Splatting in Few-Shot Images
+#thank you!
 def render_set_depth(model_path, name, iteration, views, gaussians, pipeline, background,args):
     # Define paths for rendered images and ground truth
     depth_path = os.path.join(model_path, name, "ours_{}".format(iteration), "depth")
@@ -321,22 +329,17 @@ def render_set_depth(model_path, name, iteration, views, gaussians, pipeline, ba
     for idx, view in enumerate(tqdm(views, desc="Rendering progress")):
         if idx >maxLoopN:
             break
-        point_map_float = render_point(view, gaussians, pipeline, background)
-        # Assuming point_map is your tensor
-        #point_map_float = point_map.clone()  # Create a copy to avoid modifying the original tensor
-        # Find the minimum and maximum values excluding inf
-        min_val = point_map_float[point_map_float != float('inf')].min()
-        max_val = point_map_float[point_map_float != float('inf')].max()
+        rendering = render_depth(view, gaussians, pipeline, background)["render"]
+        rendering = rendering/10
+        # gt = view.original_image[0:3, :, :]
+        # img = rendering_to_cvimg(rendering)
+        # gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-        # Normalize the non-inf values to the range [0, 1)
-        point_map_float[point_map_float != float('inf')] = (point_map_float[point_map_float != float('inf')] - min_val) / (max_val - min_val)
-        point_map_float[point_map_float == float('inf')] = 100
-        spatial_sigma = 200  # 空间距离权重函数的标准差
-        depth_sigma = 0.1   # 深度值权重函数的标准差
-        interpolated_depth = edge_preserving_interpolation(point_map_float, spatial_sigma, depth_sigma)
-        save_path = os.path.join(depth_path, '{0:05d}_min{1:.4f}_max{2:.4f}.png'.format(idx, min_val.item(), max_val.item()))
-        # torchvision.utils.save_image(point_map_float,save_path)
-        cv2.imwrite(save_path,interpolated_depth)
+        # # 将灰度图像转换为浮点型
+        # float_gray_img = gray_img.astype(np.float32)
+        # cv2.imwrite(os.path.join(depth_path, '{0:05d}'.format(idx) + ".png"),float_gray_img)
+        torchvision.utils.save_image(rendering, os.path.join(depth_path, '{0:05d}'.format(idx) + ".png"))
+        # torchvision.utils.save_image(gt, os.path.join(gts_path, '{0:05d}'.format(idx) + ".png"))
 
 
 def render_sets_mixed(dataset: ModelParams, iteration: int, pipeline: PipelineParams, args):
