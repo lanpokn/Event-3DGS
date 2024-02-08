@@ -69,17 +69,16 @@ def Normalize_event_frame(gt_image):
     #TODO, no 1 only 0.5 and -1, why?
     # event_image = torch.full_like(gt_image[0:1, :, :], 0.5)
     # 计算新的 event_image
-    assert gt_image.shape[0] == 3, "Input image must have three channels"
-    event_image = (gt_image[0,:, :] - gt_image[2,:, :]) / (10 / 255)
-    # # positive
-    # condition_1 = gt_image[0, :, :] > 0.7
-    # #negtive
-    # condition_2 = gt_image[2, :, :] < 0.2
+    if gt_image.shape[0] == 3:
+        event_image = (gt_image[0,:, :] - gt_image[2,:, :]) / (10 / 255)
+        return event_image.unsqueeze(0)
+    # if gt_image.shape[2] == 3:
+    #     event_image = (gt_image[:, :,0] - gt_image[:, :,2])
+    #     event_image = event_image.transpose(1, 2)
+    #     event_image = event_image.transpose(0, 1)
+    #     return event_image.unsqueeze(2)
 
-    # event_image[0,condition_1] = 1
-    # event_image[0,condition_2] = 0
-    # torchvision.utils.save_image(event_image.float(), "event_image.png")
-    return event_image.unsqueeze(0)
+    assert gt_image.shape[0] == 3, "Input image must have three channels"
 
 
 def l1_loss(network_output, gt):

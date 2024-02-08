@@ -207,12 +207,12 @@ def render_set_event(model_path, name, iteration, views, gaussians, pipeline, ba
             opencv_image = rendering_to_cvimg(rendering)
             img_list.append(opencv_image)
     ev_full = EventBuffer(1)
-    dt = 2857
+    dt = 286
     print("generating events...")
-    simulate_event_camera(img_list,ev_full,2857)
+    simulate_event_camera(img_list,ev_full,dt)
     print("saving ...")
     save_event_result(ev_full,event_path)
-    # generate_images(event_path,dt,(maxLoopN+1)*interpolation_number,img_list[0].shape[1],img_list[0].shape[0])
+    generate_images(event_path,dt,(maxLoopN+1)*interpolation_number,img_list[0].shape[1],img_list[0].shape[0])
     generate_images_accumu(event_path,dt,(maxLoopN+1)*interpolation_number,img_list[0].shape[1],img_list[0].shape[0])
 
     if old_event == True:

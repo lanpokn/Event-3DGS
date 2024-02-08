@@ -22,20 +22,71 @@ from tqdm import tqdm
 from utils.image_utils import psnr
 from argparse import ArgumentParser, Namespace
 from arguments import ModelParams, PipelineParams, OptimizationParams
-
+from Event_sensor.event_tools import *
+import copy
+from Event_sensor.src.event_buffer import EventBuffer
 import torchvision
+from render import Generate_new_view
 try:
     from torch.utils.tensorboard import SummaryWriter
     TENSORBOARD_FOUND = True
 except ImportError:
     TENSORBOARD_FOUND = False
+import random
+def generate_random_integer_nearby(target_integer, range_half_width):
+    """
+    Generate a random integer nearby the target_integer within the specified range_half_width.
+    """
+    lower_bound = target_integer - range_half_width
+    upper_bound = target_integer + range_half_width
+    return random.randint(lower_bound, upper_bound)
+class CameraPoseInterpolator:
+    def __init__(self, camera_poses,dt):
+        self.camera_poses = camera_poses
+        self.dt = dt
 
-def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from):
+    def interpolate_pose_at_time(self, t):
+        """
+        Interpolates camera pose at a given time t.
+        more range to avoid out of range
+        """
+        for idx in range(-10,len(self.camera_poses) + 10):
+            if idx <0:
+                view = self.camera_poses[0]
+                view_next = self.camera_poses[1]
+            else:
+                view = self.camera_poses[len(self.camera_poses)-1]
+                view_next = self.camera_poses[len(self.camera_poses)-2]
+
+            view = self.camera_poses[idx]
+            view_next = self.camera_poses[idx + 1]
+
+            if t >= self.dt*idx and t <= self.dt*(idx+1):
+                alpha = (t - self.dt*idx) / (self.dt)
+
+                q_start = rotation_matrix_to_quaternion(view.R)
+                q_end = rotation_matrix_to_quaternion(view_next.R)
+                T_start = view.T
+                T_end = view_next.T
+
+                q_temp = Nlerp(q_end, q_start, alpha)
+                q_temp /= np.linalg.norm(q_temp)
+                R_temp = quaternion_to_rotation_matrix(q_temp)
+
+                T_temp = Nlerp(T_end, T_start, alpha)
+                view_temp = Generate_new_view(view,R_temp,T_temp)
+                return view_temp
+def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from,event_path):
     first_iter = 0
     tb_writer = prepare_output_and_logger(dataset)
     gaussians = GaussianModel(dataset.sh_degree)
     scene = Scene(dataset, gaussians)
     gaussians.training_setup(opt)
+    #get evennt data
+    if event_path != None:
+        events_data = EventsData()
+        events_data.read_IEBCS_events(os.path.join(event_path,"raw.dat"), 10000000)
+        ev_data = events_data.events[0]
     if checkpoint:
         (model_params, __) = torch.load(checkpoint)
         gaussians.restore(model_params, opt)
@@ -50,6 +101,10 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     ema_loss_for_log = 0.0
     progress_bar = tqdm(range(first_iter, opt.iterations), desc="Training progress")
     first_iter += 1
+    #TODO first generate a camera position according to scene.getTrainCameras().copy()
+    #use t as indicator
+    Interpolator = CameraPoseInterpolator(scene.getTrainCameras(),286)
+    # pose = Interpolator.interpolate_pose_at_time(4000)
     for iteration in range(first_iter, opt.iterations + 1):        
         if network_gui.conn == None:
             network_gui.try_connect()
@@ -116,8 +171,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         # loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image))
         # loss.backward()
         if args.event == True :
-            if index == len(viewpoint_stack):
-                print("exceed error")
+            # assert event_path==None, "No event file provided in event mode"
+            # assert index == len(viewpoint_stack), "exceed error"    
             #before it use a pop func, thus that item is nolongger exist
             index_next = index+1
             #use pop is wrong, is pop, then may discontinue
@@ -125,6 +180,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             render_pkg_next = render(viewpoint_cam_next, gaussians, pipe, bg)
             image_next = render_pkg_next["render"]
             # img_diff = differentialable_event_simu(viewpoint_cam.original_image.cuda(),viewpoint_cam_next.original_image.cuda())
+           ##TODO use random t1 t2 to generate gt and img_diff
             img_diff = differentialable_event_simu(image,image_next)
             gt_image = viewpoint_cam.original_image.cuda()
             gt_image = Normalize_event_frame(gt_image)
@@ -132,7 +188,34 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             # opt.lambda_dssim = 0.999
             # loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(img_diff, gt_image))
             Ll1 = 1.0 - ssim(img_diff, gt_image)
-            loss =  Ll1 
+            if 0 <= index <= 3:
+                t1 =  random.randint(0, 6)
+                t2 =  random.randint(0, 6)
+            elif len(viewpoint_stack) - 3 <= index <= len(viewpoint_stack) - 6:
+                t1 =  random.randint(len(viewpoint_stack) - 9, len(viewpoint_stack) - 3)
+                t2 =  random.randint(len(viewpoint_stack) - 9, len(viewpoint_stack) - 3)
+            else:
+                t1 = random.randint(max(0, index - 3), min(len(viewpoint_stack) - 1, index + 3))
+                t2 = random.randint(max(0, index - 3), min(len(viewpoint_stack) - 1, index + 3))
+            if t1>t2:
+                temp = t2
+                t2 = t1
+                t1 = temp
+            view = Interpolator.interpolate_pose_at_time(t1*Interpolator.dt)
+            view_next = Interpolator.interpolate_pose_at_time(t2*Interpolator.dt)
+            img1 = render(view, gaussians, pipe, bg)["render"]
+            img2 = render(view_next, gaussians, pipe, bg)["render"]
+            img_diff_ran = differentialable_event_simu(img1,img2)
+            # with torch.no_grad:
+            #     gt_image_ran = events_data.display_events_accumu(ev_data,t1*Interpolator.dt,t2*Interpolator.dt)
+            #     gt_image_ran = Normalize_event_frame(gt_image_ran)
+            gt_image_ran = events_data.display_events_accumu(ev_data,t1*Interpolator.dt,t2*Interpolator.dt)
+            gt_image_ran = np.reshape(gt_image_ran, (3, gt_image_ran.shape[0],gt_image_ran.shape[1]))
+            gt_image_ran = gt_image_ran.astype(np.float32)  # Convert to float32 if necessary
+            gt_image_ran = torch.from_numpy(gt_image_ran)  # Co
+            gt_image_ran = Normalize_event_frame(gt_image_ran).to('cuda')
+            Ll2 = 1.0 - ssim(img_diff_ran, gt_image_ran)
+            loss =  Ll1 + Ll2
             loss.backward()
         elif args.gray == True:
             gt_image = viewpoint_cam.original_image.cuda()
@@ -260,7 +343,8 @@ if __name__ == "__main__":
     parser.add_argument("--save_iterations", nargs="+", type=int, default=[999,1999,2_999, 3_999])
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[999,1999,2999,4000])
-    parser.add_argument("--start_checkpoint", type=str, default = None) 
+    parser.add_argument("--start_checkpoint", type=str, default = None)
+    parser.add_argument("--dat", type=str, default = None)
     
     args = parser.parse_args(sys.argv[1:])
     args.save_iterations.append(args.iterations)
@@ -273,7 +357,7 @@ if __name__ == "__main__":
     # Start GUI server, configure and run training
     network_gui.init(args.ip, args.port)
     torch.autograd.set_detect_anomaly(args.detect_anomaly)
-    training(lp.extract(args), op.extract(args), pp.extract(args), args.test_iterations, args.save_iterations, args.checkpoint_iterations, args.start_checkpoint, args.debug_from)
+    training(lp.extract(args), op.extract(args), pp.extract(args), args.test_iterations, args.save_iterations, args.checkpoint_iterations, args.start_checkpoint, args.debug_from,args.dat)
 
     # All done
     print("\nTraining complete.")

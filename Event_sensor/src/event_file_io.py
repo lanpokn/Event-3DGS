@@ -341,38 +341,44 @@ class EventsData:
             
             # if window.should_close():
             #     break
-    def display_events(self,events,t_begin,t_end,downsample = True,width=1280, height=720):
+    def display_events(self,events,t_begin,t_end,width=1280, height=720):
         img = 255 * np.ones((height, width, 3), dtype=np.uint8)
-
-        events_filtered = events[(events['t'] >= t_begin) & (events['t'] <= t_end)]
-        # events_filtered = events[(events['t'] >= t_begin) & (events['t'] <= t_end) & ((events['t'] <= 40000) | (events['t'] >= 41000)) & ((events['t'] <= 43000) | (events['t'] >= 45800))]  # Filter events based on time
+        
+        events_filtered = events[(events['t'] >= t_begin) & (events['t'] <= t_end)]  # Filter events based on time
+        
         if events_filtered.size:
             assert events_filtered['x'].max() < width, "out of bound events: x = {}, w = {}".format(events_filtered['x'].max(), width)
             assert events_filtered['y'].max() < height, "out of bound events: y = {}, h = {}".format(events_filtered['y'].max(), height)
             
             ON_index = np.where(events_filtered['p'] == 1)
-            img[events_filtered['y'][ON_index], events_filtered['x'][ON_index], :] = [30, 30, 220] * events_filtered['p'][ON_index][:, None]  # red [0, 0, 255]
+            img[events_filtered['y'][ON_index], events_filtered['x'][ON_index], :] = [30, 30, 220] * events_filtered['p'][ON_index][:, None]  # red [0, 0, 255]#bgr
             
             OFF_index = np.where(events_filtered['p'] == 0)
             img[events_filtered['y'][OFF_index], events_filtered['x'][OFF_index], :] = [200, 30, 30] * (events_filtered['p'][OFF_index] + 1)[:, None]  # green [0, 255, 0], blue [255, 0, 0]
-        if downsample == True:
-            loop = 180*6
-            for looptime in  range(0,loop):
-                index_x = np.arange(0,height)
-                index_x = np.random.choice(index_x,10,replace=True) 
-                for i in index_x:
-                    index_y = np.arange(0,width)
-                    index_y = np.random.choice(index_y,10,replace=True)
-                    for j in index_y:
-                        img[i,j] = [255,255,255]
-                index_y = np.arange(0,width)
-                index_y = np.random.choice(index_y,10,replace=True) 
-                for i in index_y:
-                    index_x = np.arange(0,height)
-                    index_x = np.random.choice(index_x,10,replace=True)
-                    for j in index_x:
-                        img[j,i] = [255,255,255]
-                        index_x = np.arange(0,height)
+        
+        return img
+    def display_events_accumu(self, events, t_begin, t_end, width=1280, height=720):
+        width = self.width
+        height = self.height
+        img = np.zeros((height, width, 3), dtype=np.uint8)
+
+        events_filtered = events[(events['t'] >= t_begin) & (events['t'] <= t_end)]  # Filter events based on time
+
+        # 将 events_filtered['x'], events_filtered['y'] 转换为整数类型
+        x_values = events_filtered['x'].astype(int)
+        y_values = events_filtered['y'].astype(int)
+
+        # 创建一个零矩阵，用于存储 on 和 off 的数量
+        on_count = np.zeros((height, width), dtype=np.uint8)
+        off_count = np.zeros((height, width), dtype=np.uint8)
+
+        # 计算 on 和 off 的数量
+        np.add.at(on_count, (y_values, x_values), (events_filtered['p'] == 1))
+        np.add.at(off_count, (y_values, x_values), (events_filtered['p'] == 0))
+
+        img[:, :, 2] = on_count*10  # Store on counts in the third channel
+        img[:, :, 0] = off_count*10  # Store off counts in the first channel
+
         return img
     def generate_video(self, events, t_begin, t_end, dt=2857*2,video_name = "default",cycles = 1,width=1280, height=720):
         fourcc = cv2.VideoWriter_fourcc(*'H264')  # Define codec for video writer
