@@ -81,3 +81,27 @@ def generate_images_accumu(event_path,dt, total_dt_nums,width, height):
     for idx in range(0,total_dt_nums):
         img = events_data.display_events_accumu(ev_data,dt*idx,dt*(idx+1),width, height)
         cv2.imwrite(os.path.join(event_path+"_ac", '{0:05d}'.format(idx) + ".png"), img)
+def generate_images_accumu_eds(event_path,dt, total_dt_nums,width=None, height=None):
+    events_data = EventsData()
+    events_data.read_eds_events(os.path.join(event_path,"events.h5"), (total_dt_nums+1)*dt)
+    ev_data = events_data.events[0]
+    if width == None:
+        width = events_data.width
+        height = events_data.height
+
+    # point_cloud = events_data.display_events_3D(ev_data,0,5000)
+    # View_3D(point_cloud)
+    
+    for idx in range(0,total_dt_nums):
+        img = events_data.display_events_accumu(ev_data,dt*idx,dt*(idx+0.1),width, height)
+        cv2.imwrite(os.path.join(event_path+"/images_ac", 'frame_{0:010d}'.format(idx*10) + ".png"), img)
+def generate_images_eds(event_path,dt, total_dt_nums,width=None, height=None):
+    events_data = EventsData()
+    events_data.read_eds_events(os.path.join(event_path,"events.h5"), (total_dt_nums+1)*dt)
+    ev_data = events_data.events[0]
+    if width == None:
+        width = events_data.width
+        height = events_data.height
+    for idx in range(0,total_dt_nums):
+        img = events_data.display_events(ev_data,dt*idx,dt*(idx+0.2))
+        cv2.imwrite(os.path.join(event_path+"/images_ev", 'frame_{0:010d}'.format(idx*10) + ".png"), img)

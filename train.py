@@ -82,11 +82,11 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     gaussians = GaussianModel(dataset.sh_degree)
     scene = Scene(dataset, gaussians)
     gaussians.training_setup(opt)
-    #get evennt data
-    if event_path != None:
-        events_data = EventsData()
-        events_data.read_IEBCS_events(os.path.join(event_path,"raw.dat"), 10000000)
-        ev_data = events_data.events[0]
+    # #get evennt data
+    # if event_path != None:
+    #     events_data = EventsData()
+    #     events_data.read_IEBCS_events(os.path.join(event_path,"raw.dat"), 10000000)
+    #     ev_data = events_data.events[0]
     if checkpoint:
         (model_params, __) = torch.load(checkpoint)
         gaussians.restore(model_params, opt)
@@ -184,43 +184,43 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             img_diff = differentialable_event_simu(image,image_next)
             gt_image = viewpoint_cam.original_image.cuda()
             gt_image = Normalize_event_frame(gt_image)
-            # Ll1 = l1_loss_event(img_diff, gt_image)
-            # opt.lambda_dssim = 0.999
-            # loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(img_diff, gt_image))
-            Ll1 = 1.0 - ssim(img_diff, gt_image)
-            if 0 <= index <= 3:
-                t1 =  random.randint(0, 6)
-                t2 =  random.randint(0, 6)
-            elif len(viewpoint_stack) - 3 <= index <= len(viewpoint_stack) - 6:
-                t1 =  random.randint(len(viewpoint_stack) - 9, len(viewpoint_stack) - 3)
-                t2 =  random.randint(len(viewpoint_stack) - 9, len(viewpoint_stack) - 3)
-            else:
-                t1 = random.randint(max(0, index - 3), min(len(viewpoint_stack) - 1, index + 3))
-                t2 = random.randint(max(0, index - 3), min(len(viewpoint_stack) - 1, index + 3))
-            if t1>t2:
-                temp = t2
-                t2 = t1
-                t1 = temp
-            view = Interpolator.interpolate_pose_at_time(t1*Interpolator.dt)
-            view_next = Interpolator.interpolate_pose_at_time(t2*Interpolator.dt)
-            img1 = render(view, gaussians, pipe, bg)["render"]
-            img2 = render(view_next, gaussians, pipe, bg)["render"]
-            img_diff_ran = differentialable_event_simu(img1,img2)
-            # with torch.no_grad:
-            #     gt_image_ran = events_data.display_events_accumu(ev_data,t1*Interpolator.dt,t2*Interpolator.dt)
-            #     gt_image_ran = Normalize_event_frame(gt_image_ran)
-            gt_image_ran = events_data.display_events_accumu(ev_data,t1*Interpolator.dt,t2*Interpolator.dt)
-            gt_image_ran = np.reshape(gt_image_ran, (3, gt_image_ran.shape[0],gt_image_ran.shape[1]))
-            gt_image_ran = gt_image_ran.astype(np.float32)  # Convert to float32 if necessary
-            gt_image_ran = torch.from_numpy(gt_image_ran)  # Co
-            gt_image_ran = Normalize_event_frame(gt_image_ran).to('cuda')
-            Ll2 = 1.0 - ssim(img_diff_ran, gt_image_ran)
-            loss =  Ll1 + Ll2
+            opt.lambda_dssim = 0.9999999
+            Ll1 = opt.lambda_dssim * (1.0 - ssim(img_diff, gt_image))
+            loss =  Ll1
+            # Ll1 = 1.0 - ssim(img_diff, gt_image)
+            # if 0 <= index <= 3:
+            #     t1 =  random.randint(0, 6)
+            #     t2 =  random.randint(0, 6)
+            # elif len(viewpoint_stack) - 3 <= index <= len(viewpoint_stack) - 6:
+            #     t1 =  random.randint(len(viewpoint_stack) - 9, len(viewpoint_stack) - 3)
+            #     t2 =  random.randint(len(viewpoint_stack) - 9, len(viewpoint_stack) - 3)
+            # else:
+            #     t1 = random.randint(max(0, index - 3), min(len(viewpoint_stack) - 1, index + 3))
+            #     t2 = random.randint(max(0, index - 3), min(len(viewpoint_stack) - 1, index + 3))
+            # if t1>t2:
+            #     temp = t2
+            #     t2 = t1
+            #     t1 = temp
+            # view = Interpolator.interpolate_pose_at_time(t1*Interpolator.dt)
+            # view_next = Interpolator.interpolate_pose_at_time(t2*Interpolator.dt)
+            # img1 = render(view, gaussians, pipe, bg)["render"]
+            # img2 = render(view_next, gaussians, pipe, bg)["render"]
+            # img_diff_ran = differentialable_event_simu(img1,img2)
+            # # with torch.no_grad:
+            # #     gt_image_ran = events_data.display_events_accumu(ev_data,t1*Interpolator.dt,t2*Interpolator.dt)
+            # #     gt_image_ran = Normalize_event_frame(gt_image_ran)
+            # gt_image_ran = events_data.display_events_accumu(ev_data,t1*Interpolator.dt,t2*Interpolator.dt)
+            # gt_image_ran = np.reshape(gt_image_ran, (3, gt_image_ran.shape[0],gt_image_ran.shape[1]))
+            # gt_image_ran = gt_image_ran.astype(np.float32)  # Convert to float32 if necessary
+            # gt_image_ran = torch.from_numpy(gt_image_ran)  # Co
+            # gt_image_ran = Normalize_event_frame(gt_image_ran).to('cuda')
+            # Ll2 = 1.0 - ssim(img_diff_ran, gt_image_ran)
+            # loss =  Ll1 + Ll2
             loss.backward()
         elif args.gray == True:
             gt_image = viewpoint_cam.original_image.cuda()
             ##TODO hyper parameter
-            gt_image = gt_image*3.5
+            gt_image = gt_image*14
             Ll1 = l1_loss_gray(image, gt_image)
             loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim_gray(image, gt_image))
             loss.backward()
