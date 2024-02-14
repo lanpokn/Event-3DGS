@@ -28,12 +28,13 @@ def l1_loss_gray(network_output, gt):
         network_output_gray = rgb_to_grayscale(network_output)
     if gt.size(-3) == 3:    
         gt_gray = rgb_to_grayscale(gt)
+        return torch.abs((network_output_gray - gt_gray)).mean()
 
-    return torch.abs((network_output_gray - gt_gray)).mean()
+    return torch.abs((network_output - gt)).mean()
 def differentialable_threld(x,C=0.3,e=0.00001,w = 10):
     torch.sign(x)/(1 + torch.exp(w*(C - torch.abs(x))))
 
-def differentialable_event_simu(image,image_next):
+def differentialable_event_simu(image,image_next,C=0.3):
     #return event number! img_diff can be negtive
     img1 = rgb_to_grayscale(image)
     img2 = rgb_to_grayscale(image_next)
@@ -41,7 +42,7 @@ def differentialable_event_simu(image,image_next):
     # torchvision.utils.save_image(img2, "img2.png")
     #total physical, but not work
     epsilon = 1e-8  # avoid dividing 0
-    C=0.3
+    # C=10
     img_diff = (torch.log(img2+epsilon) - torch.log(img1+epsilon))/C
     # C=0.3
     # w=10
@@ -78,7 +79,7 @@ def Normalize_event_frame(gt_image):
     #     event_image = event_image.transpose(0, 1)
     #     return event_image.unsqueeze(2)
 
-    assert gt_image.shape[0] == 3, "Input image must have three channels"
+    # assert gt_image.shape[0] == 3, "Input image must have three channels"
 
 
 def l1_loss(network_output, gt):
@@ -182,8 +183,12 @@ def create_window(window_size, channel):
 def ssim_gray(img1, img2, window_size=11, size_average=True):
     if img1.size(-3) == 3:
         img1_gray = rgb_to_grayscale(img1)
+    else:
+        img1_gray = img1
     if img2.size(-3) == 3:    
         img2_gray = rgb_to_grayscale(img2)
+    else:
+        img2_gray = img2
 
     channel = img1_gray.size(-3)
     window = create_window(window_size, channel)

@@ -57,7 +57,7 @@ while cap.isOpened():
         ed.update(ev, dt)
         ev_full.increase_ev(ev)
         time += dt
-        if time > 0.1e7:
+        if time > 0.1e9:
             break
 out.release()
 cap.release()

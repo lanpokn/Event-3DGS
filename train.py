@@ -92,6 +92,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         gaussians.restore(model_params, opt)
 
     bg_color = [1, 1, 1] if dataset.white_background else [0, 0, 0]
+    # bg_color = [1,1,1]
     background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
 
     iter_start = torch.cuda.Event(enable_timing = True)
@@ -103,7 +104,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     first_iter += 1
     #TODO first generate a camera position according to scene.getTrainCameras().copy()
     #use t as indicator
-    Interpolator = CameraPoseInterpolator(scene.getTrainCameras(),286)
+    Interpolator = CameraPoseInterpolator(scene.getTrainCameras(),13513*10)
     # pose = Interpolator.interpolate_pose_at_time(4000)
     for iteration in range(first_iter, opt.iterations + 1):        
         if network_gui.conn == None:
@@ -138,10 +139,10 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         if args.event == True:
             #TODO, in fact, it's better to be -2
             #index = randint(0, len(viewpoint_stack)-2)
-            index = randint(0, len(viewpoint_stack)-3)
+            index = randint(1, len(viewpoint_stack)-3)
         else:
             # index = randint(0, len(viewpoint_stack)-1)
-            index = randint(0, len(viewpoint_stack)-2)
+            index = randint(1, len(viewpoint_stack)-2)
         # viewpoint_cam = viewpoint_stack.pop(index)
         # index= 0
         viewpoint_cam = viewpoint_stack[index]
@@ -174,19 +175,39 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             # assert event_path==None, "No event file provided in event mode"
             # assert index == len(viewpoint_stack), "exceed error"    
             #before it use a pop func, thus that item is nolongger exist
+            
+            #i+1 - i
             index_next = index+1
-            #use pop is wrong, is pop, then may discontinue
             viewpoint_cam_next = viewpoint_stack[index_next]
+            # viewpoint_cam_next = Interpolator.interpolate_pose_at_time((index+0.1)*Interpolator.dt)
             render_pkg_next = render(viewpoint_cam_next, gaussians, pipe, bg)
             image_next = render_pkg_next["render"]
-            # img_diff = differentialable_event_simu(viewpoint_cam.original_image.cuda(),viewpoint_cam_next.original_image.cuda())
-           ##TODO use random t1 t2 to generate gt and img_diff
-            img_diff = differentialable_event_simu(image,image_next)
+            img_diff = differentialable_event_simu(image,image_next,C=0.3)
+
+            #i - (i-1)
+            # index_pre = index-1
+            # viewpoint_cam_pre = viewpoint_stack[index_pre]
+            # # viewpoint_cam_next = Interpolator.interpolate_pose_at_time((index+0.1)*Interpolator.dt)
+            # render_pkg_pre = render(viewpoint_cam_pre, gaussians, pipe, bg)
+            # image_pre = render_pkg_pre["render"]
+            # img_diff = differentialable_event_simu(image_pre,image,C=0.3)
+
+
             gt_image = viewpoint_cam.original_image.cuda()
             gt_image = Normalize_event_frame(gt_image)
-            opt.lambda_dssim = 0.9999999
-            Ll1 = opt.lambda_dssim * (1.0 - ssim(img_diff, gt_image))
-            loss =  Ll1
+
+            # 将值归一化到[-1, 1]
+            # img_diff = 2 * (img_diff - torch.min(img_diff)) / (torch.max(img_diff) -torch.min(img_diff))-1
+            # gt_image = 2 * (gt_image -  torch.min(gt_image)) / (torch.max(gt_image) -  torch.min(gt_image))-1
+            # opt.lambda_dssim = 0.9999999
+            # Ll1 = opt.lambda_dssim * (1.0 - ssim(img_diff, gt_image))
+            # loss =  Ll1
+            Ll1 = l1_loss_gray(img_diff, gt_image)
+            opt.lambda_dssim = 0
+            loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim_gray(img_diff, gt_image))
+
+            torchvision.utils.save_image(gt_image, "gt_image.png")
+            torchvision.utils.save_image(img_diff, "img_diff.png")
             # Ll1 = 1.0 - ssim(img_diff, gt_image)
             # if 0 <= index <= 3:
             #     t1 =  random.randint(0, 6)
@@ -220,7 +241,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         elif args.gray == True:
             gt_image = viewpoint_cam.original_image.cuda()
             ##TODO hyper parameter
-            gt_image = gt_image*14
+            # gt_image = gt_image*14
             Ll1 = l1_loss_gray(image, gt_image)
             loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim_gray(image, gt_image))
             loss.backward()
@@ -342,7 +363,7 @@ if __name__ == "__main__":
     parser.add_argument("--test_iterations", nargs="+", type=int, default=[2_999, 3_999])
     parser.add_argument("--save_iterations", nargs="+", type=int, default=[999,1999,2_999, 3_999])
     parser.add_argument("--quiet", action="store_true")
-    parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[999,1999,2999,4000])
+    parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[999,1999,2999,4000,7999])
     parser.add_argument("--start_checkpoint", type=str, default = None)
     parser.add_argument("--dat", type=str, default = None)
     
