@@ -206,8 +206,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             opt.lambda_dssim = 0
             loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim_gray(img_diff, gt_image))
 
-            torchvision.utils.save_image(gt_image, "gt_image.png")
-            torchvision.utils.save_image(img_diff, "img_diff.png")
+            # torchvision.utils.save_image(gt_image, "gt_image.png")
+            # torchvision.utils.save_image(img_diff, "img_diff.png")
             # Ll1 = 1.0 - ssim(img_diff, gt_image)
             # if 0 <= index <= 3:
             #     t1 =  random.randint(0, 6)

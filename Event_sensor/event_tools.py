@@ -133,3 +133,17 @@ def generate_images_accumu_T(event_path,dt, total_dt_nums,frac = 0.1):
     for idx in range(0,total_dt_nums):
         img = events_data.display_events_accumu(ev_data,dt*idx,dt*(idx+frac),width, height)
         cv2.imwrite(os.path.join(event_path+"/images_ac", '{:04d}.{}'.format(idx, "png.png")), img)
+def generate_images_accumu_Tumvie(event_path,dt, total_dt_nums,frac = 0.1):
+    events_data = EventsData()
+    ts, x, y, p =  events_data.read_Tumvie_events(event_path+".h5", (total_dt_nums)*dt)
+    # ev_data = events_data.events[0]
+
+    width = events_data.width
+    height = events_data.height
+
+    # point_cloud = events_data.display_events_3D(ev_data,0,5000)
+    # View_3D(point_cloud)
+    
+    for idx in range(0,total_dt_nums):
+        img = events_data.display_events_accumu_raw(x,y,ts,p,dt*idx,dt*(idx+frac),width, height)
+        cv2.imwrite(os.path.join(event_path+"/images_ac", '{:05d}.{}'.format(idx, ".png")), img)

@@ -25,13 +25,21 @@ import struct
 from metavision_core.event_io import DatWriter
 
 import h5py
+import hdf5plugin
 
 def load_h5_event(input_path):
     with h5py.File(input_path, 'r') as f:
-        ts = f['t'][:]
-        x = f['x'][:]
-        y = f['y'][:]
-        p = f['p'][:]
+        try:
+            f = f["events"]
+            ts = f['t'][:]
+            x = f['x'][:]
+            y = f['y'][:]
+            p = f['p'][:]
+        except:
+            ts = f['t'][:]
+            x = f['x'][:]
+            y = f['y'][:]
+            p = f['p'][:]
     return ts, x, y, p
 def write_meta_dat(filename, ts, x, y, pol, width=None, height=None):
     if width is None:
@@ -192,24 +200,53 @@ class EventsData:
             evs['p'] = p[start_idx:end_idx]
             self.events.append(evs)
             self.global_counter += evs.size
+    def read_Tumvie_events(self, input_path: str,delta_t_input:int):
+        # input path should be xxx .dat
+        """Process events and update EventsData object"""
+        ts, x, y, p = load_h5_event(input_path)
+        self.delta_t = delta_t_input
+        #x max is 
+        self.height = np.max(y) + 1  # Set self.height as the maximum value of x plus 1
+        self.width = np.max(x) + 1   # Set self.width as the maximum value of y plus 1
+        
+        #0 start, or it's too hard to tell range
+        start_time = ts[0]
+        end_time = ts[-1]
+        time_duration = end_time - start_time
+        # 0 start, or it's too hard to tell range
+        
+        num_buffers = int(time_duration // delta_t_input)
 
-        remaining_events = ts[np.searchsorted(ts, start_time + num_buffers * delta_t_input):]
-        if remaining_events.size > 0:
-            #evs = np.zeros(remaining_events.size, dtype=[('x', 'int32'), ('y', 'int32'), ('t', 'int32'), ('p', 'int32')])
-            evs = np.zeros(remaining_events.size, dtype=np.dtype({'names': ['x', 'y', 'p', 't'], 'formats': ['<u2', '<u2', '<i2', '<i8'], 'offsets': [0, 2, 4, 8], 'itemsize': 16}))            
-            evs['x'] = x[np.searchsorted(ts, start_time + num_buffers * delta_t_input):]
-            evs['y'] = y[np.searchsorted(ts, start_time + num_buffers * delta_t_input):]
-            evs['t'] = ts[np.searchsorted(ts, start_time + num_buffers * delta_t_input):]
-            evs['p'] = p[np.searchsorted(ts, start_time + num_buffers * delta_t_input):]
-            self.events.append(evs)
-            self.global_counter += evs.size
+        # for i in range(num_buffers):
+        #     start_idx = np.searchsorted(ts, start_time + i * delta_t_input)
+        #     end_idx = np.searchsorted(ts, start_time + (i + 1) * delta_t_input, side='right')
+        #     #evs = np.zeros(end_idx - start_idx, dtype=[('x', 'int32'), ('y', 'int32'), ('t', 'int32'), ('p', 'int32')])
+        #     evs = np.zeros(end_idx - start_idx, dtype=np.dtype({'names': ['x', 'y', 'p', 't'], 'formats': ['<u2', '<u2', '<i2', '<i8'], 'offsets': [0, 2, 4, 8], 'itemsize': 16}))            
+        #     evs['x'] = x[start_idx:end_idx]
+        #     evs['y'] = y[start_idx:end_idx]
+        #     evs['t'] = ts[start_idx:end_idx]
+        #     evs['p'] = p[start_idx:end_idx]
+        #     self.events.append(evs)
+        #     self.global_counter += evs.size
 
-        if self.global_min_t == -1:
-            self.global_min_t = ts[0]
-        self.global_max_t = ts[-1]
-        evs['t'] = evs['t']  -self.global_min_t
-        self.global_max_t = self.global_max_t-self.global_min_t
-        self.global_min_t = 0
+        # remaining_events = ts[np.searchsorted(ts, start_time + num_buffers * delta_t_input):]
+        # if remaining_events.size > 0:
+        #     #evs = np.zeros(remaining_events.size, dtype=[('x', 'int32'), ('y', 'int32'), ('t', 'int32'), ('p', 'int32')])
+        #     evs = np.zeros(remaining_events.size, dtype=np.dtype({'names': ['x', 'y', 'p', 't'], 'formats': ['<u2', '<u2', '<i2', '<i8'], 'offsets': [0, 2, 4, 8], 'itemsize': 16}))            
+        #     evs['x'] = x[np.searchsorted(ts, start_time + num_buffers * delta_t_input):]
+        #     evs['y'] = y[np.searchsorted(ts, start_time + num_buffers * delta_t_input):]
+        #     evs['t'] = ts[np.searchsorted(ts, start_time + num_buffers * delta_t_input):]
+        #     evs['p'] = p[np.searchsorted(ts, start_time + num_buffers * delta_t_input):]
+        #     self.events.append(evs)
+        #     self.global_counter += evs.size
+
+        # if self.global_min_t == -1:
+        #     self.global_min_t = ts[0]
+        # self.global_max_t = ts[-1]
+        # evs['t'] = evs['t']  -self.global_min_t
+        # self.global_max_t = self.global_max_t-self.global_min_t
+        # self.global_min_t = 0
+        return ts, x, y, p
     def read_IEBCS_events(self, input_path: str,delta_t_input:int):
         # input path should be xxx .dat
         """Process events and update EventsData object"""
@@ -431,6 +468,30 @@ class EventsData:
             
             OFF_index = np.where(events_filtered['p'] == 0)
             img[:,events_filtered['y'][OFF_index], events_filtered['x'][OFF_index]] = torch.tensor([30, 30, 220], dtype=torch.float32) 
+        return img
+    def display_events_accumu_raw(self, x,y,t,p, t_begin, t_end, width=1280, height=720):
+        width = self.width
+        height = self.height
+        img = np.zeros((height, width, 3), dtype=np.uint8)
+
+        filtered = t[(t >= t_begin+t[0]) & (t <= t_end+t[0])]  # Filter events based on time
+
+        # 将 events_filtered['x'], events_filtered['y'] 转换为整数类型
+        x_values = x[filtered]
+        y_values = y[filtered]
+        p_values = p[filtered]
+        # 创建一个零矩阵，用于存储 on 和 off 的数量
+        on_count = np.zeros((height, width), dtype=np.uint8)
+        off_count = np.zeros((height, width), dtype=np.uint8)
+
+
+        # 计算 on 和 off 的数量
+        np.add.at(on_count, (y_values, x_values), (p_values== 1))
+        np.add.at(off_count, (y_values, x_values), (p_values== 0))
+
+        img[:, :, 2] = on_count*10  # Store on counts in the third channel
+        img[:, :, 0] = off_count*10  # Store off counts in the first channel
+
         return img
     def display_events_accumu(self, events, t_begin, t_end, width=1280, height=720):
         width = self.width
