@@ -240,8 +240,12 @@ def render_set_blurry(model_path, name, iteration, views, gaussians, pipeline, b
     makedirs(blurry_path, exist_ok=True)
     img_list = []
     #bigger inter number, better in realism of blurry
-    interpolation_number = 20
-    for idx, view in enumerate(tqdm(views, desc="Rendering progress")):
+    interpolation_number = 18
+    # for idx, view in enumerate(tqdm(views, desc="Rendering progress")):
+    interpolation_N = args.interpolationN
+    rendering_list = []
+    for idx in tqdm(range(0, len(views), 1), desc="Rendering progress"):
+        view = views[idx]
         #skip no blurry img
         rendering = render(view, gaussians, pipeline, background)["render"]
         gt = view.original_image[0:3, :, :]
@@ -261,6 +265,7 @@ def render_set_blurry(model_path, name, iteration, views, gaussians, pipeline, b
         q_end = q_end/np.linalg.norm(q_end)
         T_end = Nlerp(T_iplus1,T_i,alpha_blurry)
         #if first img then use twice time after first
+        # rendering_list = []
         if idx == 0:
             q_start = q_i
             T_start = T_i
@@ -274,7 +279,6 @@ def render_set_blurry(model_path, name, iteration, views, gaussians, pipeline, b
             q_start = Nlerp(q_iminus1,q_i,alpha_blurry)
             q_start = q_start/np.linalg.norm(q_start)
             T_start = Nlerp(T_iminus1,T_i,alpha_blurry)
-        rendering_list = []
         for i in range(0,interpolation_number+1):
             alpha = i / interpolation_number  # Linear interpolation parameter
             # TODO , how to get better interpolation
@@ -288,9 +292,14 @@ def render_set_blurry(model_path, name, iteration, views, gaussians, pipeline, b
             view_temp = Generate_new_view(view,R_temp,T_temp)
             rendering = render(view_temp, gaussians, pipeline, background)["render"]
             rendering_list.append(rendering)
-        rendering_tensor = torch.stack(rendering_list)
+    dt = int(interpolation_number/interpolation_N)
+    for i in range(0,len(rendering_list)-interpolation_number,dt):
+        temp = []
+        for j in range(0,interpolation_number):
+            temp.append(rendering_list[i+j])
+        rendering_tensor = torch.stack(temp)
         average_rendering = torch.mean(rendering_tensor, dim=0)
-        torchvision.utils.save_image(average_rendering, os.path.join(blurry_path, '{0:05d}'.format(idx) + ".png"))
+        torchvision.utils.save_image(average_rendering, os.path.join(blurry_path, '{0:05d}'.format(int(i/3)) + ".png"))
 
 def render_set_point(model_path, name, iteration, views, gaussians, pipeline, background,args):
     # Define paths for rendered images and ground truth

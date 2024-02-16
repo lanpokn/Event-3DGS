@@ -41,6 +41,7 @@ class SceneInfo(NamedTuple):
     test_cameras: list
     nerf_normalization: dict
     ply_path: str
+    blurry_cameras: list
 
 def getNerfppNorm(cam_info):
     def get_center_and_diag(cam_centers):
@@ -129,7 +130,7 @@ def storePly(path, xyz, rgb):
     ply_data = PlyData([vertex_element])
     ply_data.write(path)
 
-def readColmapSceneInfo(path, images, eval, is_gray = False,is_random = False,llffhold=8):
+def readColmapSceneInfo(path, images, eval, is_gray = False,is_random = False,is_deblur = False,llffhold=8):
     try:
         cameras_extrinsic_file = os.path.join(path, "sparse/0", "images.bin")
         cameras_intrinsic_file = os.path.join(path, "sparse/0", "cameras.bin")
@@ -144,7 +145,12 @@ def readColmapSceneInfo(path, images, eval, is_gray = False,is_random = False,ll
     reading_dir = "images" if images == None else images
     cam_infos_unsorted = readColmapCameras(cam_extrinsics=cam_extrinsics, cam_intrinsics=cam_intrinsics, images_folder=os.path.join(path, reading_dir))
     cam_infos = sorted(cam_infos_unsorted.copy(), key = lambda x : x.image_name)
-
+    if is_deblur == True:
+        reading_dir_blurrry = "images_blurry"
+        blurry_cam_infos_unsorted = readColmapCameras(cam_extrinsics=cam_extrinsics, cam_intrinsics=cam_intrinsics, images_folder=os.path.join(path, reading_dir_blurrry))
+        blurry_cameras_infos = sorted(blurry_cam_infos_unsorted.copy(), key = lambda x : x.image_name)
+    else:
+        blurry_cameras_infos = None
     if eval:
         train_cam_infos = [c for idx, c in enumerate(cam_infos) if idx % llffhold != 0]
         test_cam_infos = [c for idx, c in enumerate(cam_infos) if idx % llffhold == 0]
@@ -168,7 +174,7 @@ def readColmapSceneInfo(path, images, eval, is_gray = False,is_random = False,ll
         pcd = fetchPly(ply_path)
     except:
         pcd = None
-    if is_gray:
+    if is_gray and not is_deblur:
         pcd.colors[:,:] = 0.5
         
     #only test, very bad
@@ -194,9 +200,10 @@ def readColmapSceneInfo(path, images, eval, is_gray = False,is_random = False,ll
                            train_cameras=train_cam_infos,
                            test_cameras=test_cam_infos,
                            nerf_normalization=nerf_normalization,
-                           ply_path=ply_path)
+                           ply_path=ply_path,
+                           blurry_cameras=blurry_cameras_infos
+                           )
     return scene_info
-
 def readCamerasFromTransforms(path, transformsfile, white_background, extension=".png"):
     cam_infos = []
 

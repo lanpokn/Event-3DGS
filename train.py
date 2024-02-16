@@ -134,6 +134,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         # only copy in first iteration
         if not viewpoint_stack:
             viewpoint_stack = scene.getTrainCameras().copy()
+            if args.deblur == True:
+                viewpoint_blurry_stack = scene.getBlurryCameras().copy()
 
         # viewpoint_cam = viewpoint_stack.pop(randint(0, len(viewpoint_stack)-1))
         if args.event == True:
@@ -245,6 +247,17 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             Ll1 = l1_loss_gray(image, gt_image)
             loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim_gray(image, gt_image))
             loss.backward()
+        elif args.deblur == True:
+            gt_image = viewpoint_cam.original_image.cuda()
+            viewpoint_cam_blur = viewpoint_blurry_stack[index]
+            gt_blur_image = viewpoint_cam_blur.original_image.cuda()
+            ##TODO hyper parameter
+            # gt_image = gt_image*14
+            blur_alpha = 0.65
+            Ll1 = (1-blur_alpha)*l1_loss_gray(image, gt_image) + blur_alpha*l1_loss(image,gt_blur_image)
+            L_ssim = (1-blur_alpha)*(1.0 - ssim_gray(image, gt_image)) + blur_alpha*(1.0 - ssim(image, gt_blur_image))
+            loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * L_ssim
+            loss.backward()
         else:
             gt_image = viewpoint_cam.original_image.cuda()
             Ll1 = l1_loss(image, gt_image)
@@ -270,6 +283,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 scene.save(iteration)
 
             # Densification
+            #TODO， these judge how to change gaussian by status, how to fix it in Eventloss? 
             if iteration < opt.densify_until_iter:
                 # Keep track of max radii in image-space for pruning
                 gaussians.max_radii2D[visibility_filter] = torch.max(gaussians.max_radii2D[visibility_filter], radii[visibility_filter])
@@ -361,7 +375,7 @@ if __name__ == "__main__":
     parser.add_argument('--debug_from', type=int, default=-1)
     parser.add_argument('--detect_anomaly', action='store_true', default=False)
     parser.add_argument("--test_iterations", nargs="+", type=int, default=[2_999, 3_999])
-    parser.add_argument("--save_iterations", nargs="+", type=int, default=[999,1999,2_999, 3_999])
+    parser.add_argument("--save_iterations", nargs="+", type=int, default=[999,1999,2999,4000,7999])
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[999,1999,2999,4000,7999])
     parser.add_argument("--start_checkpoint", type=str, default = None)
