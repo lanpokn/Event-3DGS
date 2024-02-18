@@ -42,6 +42,7 @@ class SceneInfo(NamedTuple):
     nerf_normalization: dict
     ply_path: str
     blurry_cameras: list
+    event_cameras:list
 
 def getNerfppNorm(cam_info):
     def get_center_and_diag(cam_centers):
@@ -130,7 +131,7 @@ def storePly(path, xyz, rgb):
     ply_data = PlyData([vertex_element])
     ply_data.write(path)
 
-def readColmapSceneInfo(path, images, eval, is_gray = False,is_random = False,is_deblur = False,llffhold=8):
+def readColmapSceneInfo(path, images, eval, is_gray = False,is_random = False,is_deblur = False,is_event = False,llffhold=8):
     try:
         cameras_extrinsic_file = os.path.join(path, "sparse/0", "images.bin")
         cameras_intrinsic_file = os.path.join(path, "sparse/0", "cameras.bin")
@@ -150,7 +151,14 @@ def readColmapSceneInfo(path, images, eval, is_gray = False,is_random = False,is
         blurry_cam_infos_unsorted = readColmapCameras(cam_extrinsics=cam_extrinsics, cam_intrinsics=cam_intrinsics, images_folder=os.path.join(path, reading_dir_blurrry))
         blurry_cameras_infos = sorted(blurry_cam_infos_unsorted.copy(), key = lambda x : x.image_name)
     else:
-        blurry_cameras_infos = None
+        blurry_cameras_infos = []
+    if is_event == True:
+        reading_dir_event = "images_event"
+        event_cam_infos_unsorted = readColmapCameras(cam_extrinsics=cam_extrinsics, cam_intrinsics=cam_intrinsics, images_folder=os.path.join(path, reading_dir_event))
+        event_cameras_infos = sorted(event_cam_infos_unsorted.copy(), key = lambda x : x.image_name)
+    else:
+        event_cameras_infos = []
+
     if eval:
         train_cam_infos = [c for idx, c in enumerate(cam_infos) if idx % llffhold != 0]
         test_cam_infos = [c for idx, c in enumerate(cam_infos) if idx % llffhold == 0]
@@ -201,7 +209,8 @@ def readColmapSceneInfo(path, images, eval, is_gray = False,is_random = False,is
                            test_cameras=test_cam_infos,
                            nerf_normalization=nerf_normalization,
                            ply_path=ply_path,
-                           blurry_cameras=blurry_cameras_infos
+                           blurry_cameras=blurry_cameras_infos,
+                           event_cameras = event_cameras_infos
                            )
     return scene_info
 def readCamerasFromTransforms(path, transformsfile, white_background, extension=".png"):
@@ -252,9 +261,11 @@ def readNerfSyntheticInfo(path, white_background, eval, extension=".png"):
     print("Reading Test Transforms")
     test_cam_infos = readCamerasFromTransforms(path, "transforms_test.json", white_background, extension)
     
-    if not eval:
-        train_cam_infos.extend(test_cam_infos)
-        test_cam_infos = []
+    ##NO USE, DELETE IT
+    # that cause e2vid much more better than it can be!
+    # if not eval:
+    #     train_cam_infos.extend(test_cam_infos)
+    #     test_cam_infos = []
 
     nerf_normalization = getNerfppNorm(train_cam_infos)
 
@@ -274,12 +285,13 @@ def readNerfSyntheticInfo(path, white_background, eval, extension=".png"):
         pcd = fetchPly(ply_path)
     except:
         pcd = None
-
+    blurry_cam_infos = []
     scene_info = SceneInfo(point_cloud=pcd,
                            train_cameras=train_cam_infos,
                            test_cameras=test_cam_infos,
                            nerf_normalization=nerf_normalization,
-                           ply_path=ply_path)
+                           ply_path=ply_path,
+                           blurry_cameras = blurry_cam_infos)
     return scene_info
 
 sceneLoadTypeCallbacks = {

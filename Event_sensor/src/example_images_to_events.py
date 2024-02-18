@@ -12,7 +12,7 @@ from event_display import EventDisplay
 import dsi
 
 # 输入文件夹路径
-input_folder = "D:/2024/3DGS/Nerf_Event/data/eds/09_ziggy_flying_pieces/images_ori"
+input_folder = "D:/2024/3DGS/dataset/nerf_synthetic/lego/True/train/ours_7999/renders"
 
 # 参数设置
 lat = 100
@@ -21,7 +21,8 @@ ref = 100
 tau = 300
 th = 0.3
 th_noise = 0.01
-dt = 13513
+#default as 1000
+dt = 200
 
 
 # 初始化事件缓冲区和事件显示器
@@ -30,13 +31,17 @@ ev_full = EventBuffer(1)
 
 # 获取文件夹中的所有图片文件
 image_files = sorted(os.listdir(input_folder))
-
+image_files = [file for file in image_files if len(file) <= 10]
 # 初始化视频写入器
 time = 0
 isInit = False
 # 遍历文件夹中的每张图片
+i = 0
 for image_file in image_files:
     # 构造完整的图片文件路径
+    # if i>67:
+    #     break
+    i=i+1
     image_path = os.path.join(input_folder, image_file)
     
     # 读取图片
@@ -45,7 +50,8 @@ for image_file in image_files:
     
     # 将图片转换为灰度图像
     im = cv2.cvtColor(im, cv2.COLOR_RGB2LUV)[:, :, 0]
-    
+    cv2.imshow("im",im)
+    cv2.waitKey()
     # 初始化或更新 DSI
     if not isInit:
         dsi.initSimu(int(im.shape[0]), int(im.shape[1]))  # 假设输入图片的分辨率为 1080x1920
@@ -64,9 +70,9 @@ for image_file in image_files:
                      np.array(buf["y"], dtype=np.uint16),
                      np.array(buf["p"], dtype=np.uint64),
                      10000000)
-        # ed.update(ev, dt)
+        ed.update(ev, dt)
         ev_full.increase_ev(ev)
         time += dt
         if time > 0.1e19:
             break
-ev_full.write('raw.dat')
+ev_full.write("D:/2024/3DGS/dataset/nerf_synthetic/lego/raw2.dat")

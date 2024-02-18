@@ -493,7 +493,7 @@ class EventsData:
         img[:, :, 0] = off_count*10  # Store off counts in the first channel
 
         return img
-    def display_events_accumu(self, events, t_begin, t_end, width=1280, height=720):
+    def display_events_accumu(self, events, t_begin, t_end):
         width = self.width
         height = self.height
         img = np.zeros((height, width, 3), dtype=np.uint8)

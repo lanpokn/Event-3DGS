@@ -12,7 +12,7 @@
 import os
 import torch
 from random import randint
-from utils.loss_utils import l1_loss, ssim,l1_loss_gray,ssim_gray,differentialable_event_simu,Normalize_event_frame,l1_loss_event
+from utils.loss_utils import l1_loss, ssim,l1_loss_gray,ssim_gray,differentialable_event_simu,Normalize_event_frame,rgb_to_grayscale
 from gaussian_renderer import render, network_gui
 import sys
 from scene import Scene, GaussianModel
@@ -116,7 +116,9 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 if custom_cam != None:
                     net_image = render(custom_cam, gaussians, pipe, background, scaling_modifer)["render"]
                     ##may need to multi higher
-                    net_image = net_image
+                    if args.gray == True:
+                        net_image  = 0.299 * net_image[0, :, :] + 0.587 * net_image[1, :, :] + 0.114 * net_image[2, :, :]
+                        net_image = torch.stack([net_image, net_image, net_image], dim=0)
                     net_image_bytes = memoryview((torch.clamp(net_image, min=0, max=1.0) * 255).byte().permute(1, 2, 0).contiguous().cpu().numpy())
                 network_gui.send(net_image_bytes, dataset.source_path)
                 if do_training and ((iteration < int(opt.iterations)) or not keep_alive):
@@ -136,6 +138,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             viewpoint_stack = scene.getTrainCameras().copy()
             if args.deblur == True:
                 viewpoint_blurry_stack = scene.getBlurryCameras().copy()
+            if args.event == True:
+                viewpoint_Event_stack = scene.getEventCameras().copy()
 
         # viewpoint_cam = viewpoint_stack.pop(randint(0, len(viewpoint_stack)-1))
         if args.event == True:
@@ -195,7 +199,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             # img_diff = differentialable_event_simu(image_pre,image,C=0.3)
 
 
-            gt_image = viewpoint_cam.original_image.cuda()
+            gt_image = viewpoint_Event_stack[index].original_image.cuda()
             gt_image = Normalize_event_frame(gt_image)
 
             # 将值归一化到[-1, 1]
@@ -206,7 +210,16 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             # loss =  Ll1
             Ll1 = l1_loss_gray(img_diff, gt_image)
             opt.lambda_dssim = 0
-            loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim_gray(img_diff, gt_image))
+            loss1 = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim_gray(img_diff, gt_image))
+
+            gt_image_intensity = viewpoint_cam.original_image.cuda()
+            ##TODO hyper parameter
+            # gt_image = gt_image*14
+            Ll1 = l1_loss_gray(image, gt_image_intensity)
+            loss2 = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim_gray(image, gt_image))
+            Event_weight = 0.5
+            loss = Event_weight*loss1 + (1-Event_weight)*loss2
+            loss.backward()
 
             # torchvision.utils.save_image(gt_image, "gt_image.png")
             # torchvision.utils.save_image(img_diff, "img_diff.png")
@@ -239,12 +252,13 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             # gt_image_ran = Normalize_event_frame(gt_image_ran).to('cuda')
             # Ll2 = 1.0 - ssim(img_diff_ran, gt_image_ran)
             # loss =  Ll1 + Ll2
-            loss.backward()
         elif args.gray == True:
             gt_image = viewpoint_cam.original_image.cuda()
             ##TODO hyper parameter
             # gt_image = gt_image*14
             Ll1 = l1_loss_gray(image, gt_image)
+            # torchvision.utils.save_image(gt_image, "gt_image.png")
+            # torchvision.utils.save_image(image, "image.png")
             loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim_gray(image, gt_image))
             loss.backward()
         elif args.deblur == True:
@@ -336,14 +350,18 @@ def training_report(tb_writer, iteration, Ll1, loss, l1_loss, elapsed, testing_i
     # Report test and samples of training set
     if iteration in testing_iterations:
         torch.cuda.empty_cache()
-        validation_configs = ({'name': 'test', 'cameras' : scene.getTestCameras()}, 
-                              {'name': 'train', 'cameras' : [scene.getTrainCameras()[idx % len(scene.getTrainCameras())] for idx in range(5, 30, 5)]})
-
+        # validation_configs = ({'name': 'test', 'cameras' : scene.getTestCameras()}, 
+        #                       {'name': 'train', 'cameras' : [scene.getTrainCameras()[idx % len(scene.getTrainCameras())] for idx in range(5, 30, 5)]})
+        validation_configs = ({'name': 'test', 'cameras' : scene.getTestCameras()},)
+        #TODO ssim and LPIPS
         for config in validation_configs:
             if config['cameras'] and len(config['cameras']) > 0:
                 l1_test = 0.0
                 psnr_test = 0.0
                 for idx, viewpoint in enumerate(config['cameras']):
+                    #test 0, 5, 10 ...
+                    if idx%5 == 0:
+                        continue
                     image = torch.clamp(renderFunc(viewpoint, scene.gaussians, *renderArgs)["render"], 0.0, 1.0)
                     gt_image = torch.clamp(viewpoint.original_image.to("cuda"), 0.0, 1.0)
                     if tb_writer and (idx < 5):
@@ -374,10 +392,12 @@ if __name__ == "__main__":
     parser.add_argument('--port', type=int, default=6009)
     parser.add_argument('--debug_from', type=int, default=-1)
     parser.add_argument('--detect_anomaly', action='store_true', default=False)
-    parser.add_argument("--test_iterations", nargs="+", type=int, default=[2_999, 3_999])
-    parser.add_argument("--save_iterations", nargs="+", type=int, default=[999,1999,2999,4000,7999])
+    # parser.add_argument("--test_iterations", nargs="+", type=int, default=[2_999,4000,5999,6999,7999])
+    # parser.add_argument("--test_iterations", nargs="+", type=int, default=[1])#need --eval,whether --eval matters train a lot , do not turn it in training!
+    parser.add_argument("--test_iterations", nargs="+", type=int, default=[])
+    parser.add_argument("--save_iterations", nargs="+", type=int, default=[999,1999,2999,3999,5999,6999,7999])
     parser.add_argument("--quiet", action="store_true")
-    parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[999,1999,2999,4000,7999])
+    parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[999,1999,2999,3999,5999,6999,7999])
     parser.add_argument("--start_checkpoint", type=str, default = None)
     parser.add_argument("--dat", type=str, default = None)
     
