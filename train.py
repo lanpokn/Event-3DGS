@@ -150,7 +150,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             # index = randint(0, len(viewpoint_stack)-1)
             index = randint(1, len(viewpoint_stack)-2)
         # viewpoint_cam = viewpoint_stack.pop(index)
-        # index= 0
+        # index= 1
         viewpoint_cam = viewpoint_stack[index]
         # Render
         if (iteration - 1) == debug_from:
@@ -183,20 +183,20 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             #before it use a pop func, thus that item is nolongger exist
             
             #i+1 - i
-            index_next = index+1
-            viewpoint_cam_next = viewpoint_stack[index_next]
-            # viewpoint_cam_next = Interpolator.interpolate_pose_at_time((index+0.1)*Interpolator.dt)
-            render_pkg_next = render(viewpoint_cam_next, gaussians, pipe, bg)
-            image_next = render_pkg_next["render"]
-            img_diff = differentialable_event_simu(image,image_next,C=0.3)
-
-            #i - (i-1)
-            # index_pre = index-1
-            # viewpoint_cam_pre = viewpoint_stack[index_pre]
+            # index_next = index+1
+            # viewpoint_cam_next = viewpoint_stack[index_next]
             # # viewpoint_cam_next = Interpolator.interpolate_pose_at_time((index+0.1)*Interpolator.dt)
-            # render_pkg_pre = render(viewpoint_cam_pre, gaussians, pipe, bg)
-            # image_pre = render_pkg_pre["render"]
-            # img_diff = differentialable_event_simu(image_pre,image,C=0.3)
+            # render_pkg_next = render(viewpoint_cam_next, gaussians, pipe, bg)
+            # image_next = render_pkg_next["render"]
+            # img_diff = differentialable_event_simu(image,image_next,C=0.3)
+
+            #i - (i-1),lego
+            index_pre = index-1
+            viewpoint_cam_pre = viewpoint_stack[index_pre]
+            # viewpoint_cam_next = Interpolator.interpolate_pose_at_time((index+0.1)*Interpolator.dt)
+            render_pkg_pre = render(viewpoint_cam_pre, gaussians, pipe, bg)
+            image_pre = render_pkg_pre["render"]
+            img_diff = differentialable_event_simu(image_pre,image,C=0.3)
 
 
             gt_image = viewpoint_Event_stack[index].original_image.cuda()
@@ -209,7 +209,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             # Ll1 = opt.lambda_dssim * (1.0 - ssim(img_diff, gt_image))
             # loss =  Ll1
             Ll1 = l1_loss_gray(img_diff, gt_image)
-            opt.lambda_dssim = 0
+            opt.lambda_dssim = 0.05
             loss1 = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim_gray(img_diff, gt_image))
 
             gt_image_intensity = viewpoint_cam.original_image.cuda()
@@ -217,12 +217,11 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             # gt_image = gt_image*14
             Ll1 = l1_loss_gray(image, gt_image_intensity)
             loss2 = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim_gray(image, gt_image))
-            Event_weight = 0.5
+            Event_weight = 0.2
             loss = Event_weight*loss1 + (1-Event_weight)*loss2
-            loss.backward()
-
             # torchvision.utils.save_image(gt_image, "gt_image.png")
             # torchvision.utils.save_image(img_diff, "img_diff.png")
+            loss.backward()
             # Ll1 = 1.0 - ssim(img_diff, gt_image)
             # if 0 <= index <= 3:
             #     t1 =  random.randint(0, 6)

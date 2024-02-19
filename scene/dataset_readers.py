@@ -286,12 +286,14 @@ def readNerfSyntheticInfo(path, white_background, eval, extension=".png"):
     except:
         pcd = None
     blurry_cam_infos = []
+    event_cam_infos = []
     scene_info = SceneInfo(point_cloud=pcd,
                            train_cameras=train_cam_infos,
                            test_cameras=test_cam_infos,
                            nerf_normalization=nerf_normalization,
                            ply_path=ply_path,
-                           blurry_cameras = blurry_cam_infos)
+                           blurry_cameras = blurry_cam_infos,
+                           event_cameras=event_cam_infos)
     return scene_info
 
 sceneLoadTypeCallbacks = {

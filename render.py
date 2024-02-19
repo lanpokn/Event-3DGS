@@ -26,7 +26,7 @@ from Event_sensor.event_tools import *
 import copy
 from Event_sensor.src.event_buffer import EventBuffer
 from utils.graphics_utils import getWorld2View2, getProjectionMatrix
-
+import json
 
 
 def Nlerp(a1,a2,alpha):
@@ -94,55 +94,26 @@ def Generate_new_view(view,R,T):
     view_new.camera_center = view_new.world_view_transform.inverse()[3, :3]
     return view_new
 
-# def remove_isolated_points(depth_map, d):
-#     # 创建一个二值掩码，指示哪些点是inf
-#     inf_mask = torch.isinf(depth_map)
+#TODO,camera_angle_x and rotation specifyied by command line
+def generate_transforms_json(num_frames, file_path_prefix, camera_angle_x, rotation, view_temp_list):
+    transforms_data = {
+        "camera_angle_x": camera_angle_x,
+        "frames": []
+    }
 
-#     # 使用 dilation 函数扩张非inf区域，以获取每个点的邻域
-#     neighborhood = torch.ones(1, 1, 2*d+1, 2*d+1, device=depth_map.device)
-#     non_inf_mask_dilated = F.conv2d(~inf_mask.unsqueeze(0).float(), neighborhood, padding=d).bool()
+    for i in range(num_frames):
+        file_path = f"{file_path_prefix}_{i:05d}"
+        #TODO
+        transform_matrix = view_temp_list[i]  # Assuming view_temp_list contains the transform_matrix for each frame
+        frame_data = {
+            "file_path": file_path,
+            "rotation": rotation,
+            "transform_matrix": transform_matrix.tolist()  # Converting numpy array to list for JSON serialization
+        }
+        transforms_data["frames"].append(frame_data)
 
-#     # 将小于等于d的非inf连接组件标记为需要移除的点
-#     points_to_remove = (~non_inf_mask_dilated)
-
-#     # 将需要移除的点的深度值设为inf
-#     depth_map[points_to_remove] = float('inf')
-
-#     return depth_map
-
-# def average_inf_points(depth_map, d, th):
-#     # 创建一个二值掩码，指示哪些点是inf
-#     inf_mask = torch.isinf(depth_map)
-
-#     # 使用 dilation 函数扩张inf区域，以获取每个inf点的邻域
-#     neighborhood = torch.ones(1, 1, 2*d+1, 2*d+1, device=depth_map.device)
-#     inf_mask_dilated = F.conv2d(inf_mask.unsqueeze(0).float(), neighborhood, padding=d).bool()
-
-#     # 使用 region_grow 函数进行inf点的平均值处理
-#     depth_map = region_grow(depth_map, inf_mask_dilated, d,th)
-
-#     return depth_map
-
-# def region_grow(depth_map, inf_mask_dilated, d,th):
-#     # 获取inf点的坐标
-#     inf_points = torch.stack(torch.where(inf_mask_dilated), dim=1)
-
-#     for point in inf_points:
-#         y, x = point[0].item(), point[1].item()
-
-#         # 获取当前点的邻域
-#         neighborhood = depth_map[:, y-d:y+d+1, x-d:x+d+1]
-
-#         # 判断是否存在一个以上的深度值，且分布不仅仅在一侧
-#         unique_depths = torch.unique(neighborhood[~torch.isinf(neighborhood)])
-#         if len(unique_depths) > 1 and torch.max(unique_depths) - torch.min(unique_depths) > th:
-#             # 计算深度值的平均值
-#             average_depth = torch.mean(unique_depths)
-
-#             # 将当前点的深度值设为平均值
-#             depth_map[:, y, x] = average_depth
-
-#     return depth_map
+    with open("transforms_train.json", "w") as json_file:
+        json.dump(transforms_data, json_file, indent=4)
 
 def edge_preserving_interpolation(depth_image, spatial_sigma, depth_sigma):
     # 使用双边滤波器进行边缘保持插值
