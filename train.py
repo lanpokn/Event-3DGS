@@ -146,11 +146,15 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             #TODO, in fact, it's better to be -2
             #index = randint(0, len(viewpoint_stack)-2)
             index = randint(1, len(viewpoint_stack)-3)
+            if index == 48 or index == 49:
+                index=3
         else:
             # index = randint(0, len(viewpoint_stack)-1)
             index = randint(1, len(viewpoint_stack)-2)
         # viewpoint_cam = viewpoint_stack.pop(index)
-        # index= 1
+        #delete some bad img
+            
+        # index = 1
         viewpoint_cam = viewpoint_stack[index]
         # Render
         if (iteration - 1) == debug_from:
@@ -188,7 +192,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             # # viewpoint_cam_next = Interpolator.interpolate_pose_at_time((index+0.1)*Interpolator.dt)
             # render_pkg_next = render(viewpoint_cam_next, gaussians, pipe, bg)
             # image_next = render_pkg_next["render"]
-            # img_diff = differentialable_event_simu(image,image_next,C=0.3)
+            # img_diff = differentialable_event_simu(image,image_next,1)
 
             #i - (i-1),lego
             index_pre = index-1
@@ -209,15 +213,17 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             # Ll1 = opt.lambda_dssim * (1.0 - ssim(img_diff, gt_image))
             # loss =  Ll1
             Ll1 = l1_loss_gray(img_diff, gt_image)
-            opt.lambda_dssim = 0.05
+            opt.lambda_dssim = 0
             loss1 = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim_gray(img_diff, gt_image))
 
+            #TODO pre may be better
             gt_image_intensity = viewpoint_cam.original_image.cuda()
+            # gt_image_intensity = viewpoint_cam_pre.original_image.cuda()
             ##TODO hyper parameter
             # gt_image = gt_image*14
             Ll1 = l1_loss_gray(image, gt_image_intensity)
             loss2 = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim_gray(image, gt_image))
-            Event_weight = 0.2
+            Event_weight = 0.5
             loss = Event_weight*loss1 + (1-Event_weight)*loss2
             # torchvision.utils.save_image(gt_image, "gt_image.png")
             # torchvision.utils.save_image(img_diff, "img_diff.png")
@@ -252,7 +258,11 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             # Ll2 = 1.0 - ssim(img_diff_ran, gt_image_ran)
             # loss =  Ll1 + Ll2
         elif args.gray == True:
+            #TODO pre may be better
             gt_image = viewpoint_cam.original_image.cuda()
+            # index_pre = index-1
+            # viewpoint_cam_pre = viewpoint_stack[index_pre]
+            # gt_image = viewpoint_cam_pre.original_image.cuda()
             ##TODO hyper parameter
             # gt_image = gt_image*14
             Ll1 = l1_loss_gray(image, gt_image)

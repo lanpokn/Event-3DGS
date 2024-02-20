@@ -44,23 +44,9 @@ def differentialable_event_simu(image,image_next,C=0.3):
     epsilon = 1e-8  # avoid dividing 0
     # C=10
     img_diff = (torch.log(img2+epsilon) - torch.log(img1+epsilon))/C
-    # C=0.3
-    # w=10
-    # factor1 = torch.sign(img_diff)
-    # factor2 = (1 + torch.exp(w * (C - torch.abs(img_diff))))
-    # result = (factor1 / factor2 + 1)/2
-    # torchvision.utils.save_image(result, "test.png")
 
-    # another way
-    # epsilon = 1e-8  # avoid dividing 0
-    # img_diff =(img2) - (img1)
-    # C=0.03
-    # w=10
-    # factor1 = torch.sign(img_diff)
-    # factor2 = (1 + torch.exp(w * (C - torch.abs(img_diff))))
-    # result = (factor1 / factor2 + 1)/2
-    # torchvision.utils.save_image(img_diff.float(), "img_diff.png")
-
+    # threshold = 0
+    # img_diff = torch.where(torch.abs(img_diff) < threshold , torch.tensor(0.0), img_diff)
     return img_diff
 
 

@@ -95,24 +95,25 @@ def Generate_new_view(view,R,T):
     return view_new
 
 #TODO,camera_angle_x and rotation specifyied by command line
-def generate_transforms_json(num_frames, file_path_prefix, camera_angle_x, rotation, view_temp_list):
+#TODO, still hard to get a good transform_matrix, may need to specify it per element
+def generate_transforms_json(view_list, file_path_prefix,json_path,camera_angle_x, rotation):
     transforms_data = {
         "camera_angle_x": camera_angle_x,
         "frames": []
     }
 
-    for i in range(num_frames):
+    for i in range(len(view_list)):
         file_path = f"{file_path_prefix}_{i:05d}"
         #TODO
-        transform_matrix = view_temp_list[i]  # Assuming view_temp_list contains the transform_matrix for each frame
+        transform_matrix = view_list[i].world_view_transform  # Assuming view_temp_list contains the transform_matrix for each frame
         frame_data = {
             "file_path": file_path,
             "rotation": rotation,
-            "transform_matrix": transform_matrix.tolist()  # Converting numpy array to list for JSON serialization
+            "transform_matrix": transform_matrix.transpose(0, 1).tolist()  # Converting numpy array to list for JSON serialization
         }
         transforms_data["frames"].append(frame_data)
 
-    with open("transforms_train.json", "w") as json_file:
+    with open(json_path, "w") as json_file:
         json.dump(transforms_data, json_file, indent=4)
 
 def edge_preserving_interpolation(depth_image, spatial_sigma, depth_sigma):
@@ -140,8 +141,10 @@ def render_set_event(model_path, name, iteration, views, gaussians, pipeline, ba
     makedirs(event_path, exist_ok=True)
     makedirs(event_ac_path, exist_ok=True)
     img_list = []
+    view_list = []
     interpolation_number = args.interpolationN
     for idx, view in enumerate(tqdm(views, desc="Rendering progress")):
+        view_list.append(view)
         rendering = render(view, gaussians, pipeline, background)["render"]
         gt = view.original_image[0:3, :, :]
         torchvision.utils.save_image(rendering, os.path.join(render_path, '{0:05d}'.format(idx*interpolation_number+0) + ".png"))
@@ -173,12 +176,15 @@ def render_set_event(model_path, name, iteration, views, gaussians, pipeline, ba
             T_temp = Nlerp(T_end,T_start,alpha)
             # Create a temporary view
             view_temp = Generate_new_view(view,R_temp,T_temp)
+            view_list.append(view_temp)
             rendering = render(view_temp, gaussians, pipeline, background)["render"]
             torchvision.utils.save_image(rendering, os.path.join(render_path, '{0:05d}'.format(idx*interpolation_number+i) + ".png"))
             opencv_image = rendering_to_cvimg(rendering)
             img_list.append(opencv_image)
     ev_full = EventBuffer(1)
     dt = 1000
+    generate_transforms_json(view_list,"./train/",os.path.join(model_path, name, "ours_{}".format(iteration),"transforms_train.json"),6911112070083618,0.031415926535897934)
+    generate_transforms_json(view_list,"./train_event/",os.path.join(model_path, name, "ours_{}".format(iteration),"transforms_train_event.json"),6911112070083618,0.031415926535897934)
     print("generating events...")
     simulate_event_camera(img_list,ev_full,dt)
     print("saving ...")
@@ -273,6 +279,7 @@ def render_set_blurry(model_path, name, iteration, views, gaussians, pipeline, b
         rendering_tensor = torch.stack(temp)
         average_rendering = torch.mean(rendering_tensor, dim=0)
         torchvision.utils.save_image(average_rendering, os.path.join(blurry_path, '{0:05d}'.format(int(i/3)) + ".png"))
+    # generate_transforms_json()
 
 def render_set_point(model_path, name, iteration, views, gaussians, pipeline, background,args):
     # Define paths for rendered images and ground truth
