@@ -146,11 +146,19 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             #TODO, in fact, it's better to be -2
             #index = randint(0, len(viewpoint_stack)-2)
             index = randint(1, len(viewpoint_stack)-3)
-            if index == 48 or index == 49:
-                index=3
+            # if index == 48 or index == 49:
+            #     index=3
         else:
             # index = randint(0, len(viewpoint_stack)-1)
             index = randint(1, len(viewpoint_stack)-2)
+
+        #colmap do not support additional test images
+        #thus we use manully test
+        #test on 5,25,45,65,85
+        if args.event == True or args.gray == True:
+            if index == 5 or index == 25 or index == 45 or index == 65 or index == 85:
+                index=index -1
+        
         # viewpoint_cam = viewpoint_stack.pop(index)
         #delete some bad img
             
@@ -200,6 +208,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             # viewpoint_cam_next = Interpolator.interpolate_pose_at_time((index+0.1)*Interpolator.dt)
             render_pkg_pre = render(viewpoint_cam_pre, gaussians, pipe, bg)
             image_pre = render_pkg_pre["render"]
+            
             img_diff = differentialable_event_simu(image_pre,image,C=1)
 
 

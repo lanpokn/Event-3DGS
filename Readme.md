@@ -14,3 +14,5 @@ better method have finished, colmap dataset,with images(e2vid or other event to 
 eventloss时间不应该过长，大部分时间不要启用虽然能训练很多轮，但似乎后边变化不大了
 让C偏大，效果显著的好
 最终训练时，崩溃的那几帧要排除掉，效果肯定更好！很简单，如果index =xx, index =1
+写论文时colmap模块要改成标定模块
+目前的做法会让其棱角更分母，如有不妥，只进行最后一步训练即可
