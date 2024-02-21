@@ -200,7 +200,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             # viewpoint_cam_next = Interpolator.interpolate_pose_at_time((index+0.1)*Interpolator.dt)
             render_pkg_pre = render(viewpoint_cam_pre, gaussians, pipe, bg)
             image_pre = render_pkg_pre["render"]
-            img_diff = differentialable_event_simu(image_pre,image,C=0.3)
+            img_diff = differentialable_event_simu(image_pre,image,C=1)
 
 
             gt_image = viewpoint_Event_stack[index].original_image.cuda()

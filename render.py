@@ -27,10 +27,19 @@ import copy
 from Event_sensor.src.event_buffer import EventBuffer
 from utils.graphics_utils import getWorld2View2, getProjectionMatrix
 import json
-
+import math
 
 def Nlerp(a1,a2,alpha):
     return alpha * a1 + (1 - alpha) *a2
+#TODO problem of discontinulity not solved
+def Slerp(a1,a2,alpha):
+    cosfi = a1[1]*a2[1]+a1[2]*a2[2]+a1[3]*a2[3]
+    #to fix the discontinulity
+    if(abs(a1[1]-a2[1])>0.5):
+        a2 = -a2
+    fi = math.acos(cosfi)
+    ret = math.sin(fi*(1-alpha))*a1/(math.sin(fi)+0.000001) + math.sin(fi*alpha)*a2/(math.sin(fi)+0.000001)
+    return ret
 def render_set(model_path, name, iteration, views, gaussians, pipeline, background):
     # Define paths for rendered images and ground truth
     render_path = os.path.join(model_path, name, "ours_{}".format(iteration), "renders")
@@ -169,7 +178,7 @@ def render_set_event(model_path, name, iteration, views, gaussians, pipeline, ba
             alpha = i / interpolation_number  # Linear interpolation parameter
             # TODO , how to get better interpolation
             #now only using Nlerp
-            q_temp = Nlerp(q_end,q_start,alpha)
+            q_temp = Slerp(q_end,q_start,alpha)
             q_temp = q_temp/np.linalg.norm(q_temp)
             R_temp = quaternion_to_rotation_matrix(q_temp)
             # Linear interpolation for translation vectors
