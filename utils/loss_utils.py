@@ -21,7 +21,16 @@ def rgb_to_grayscale(image):
     # torch is rgb, opencv is bgr
     # grayscale_image = image[0, :, :]
     return grayscale_image.unsqueeze(0)  # Add channel dimension
-
+def rgb_to_LUVscale(image):
+    grayscale_image = 0.4124 * image[0, :, :] + 0.35758 * image[1, :, :] + 0.1804 * image[2, :, :]
+    grayscale_image = grayscale_image.unsqueeze(0)
+    #can't use pow, bad in gradient
+    return grayscale_image
+def rgb_to_QEscale(image):
+    grayscale_image = 0.4124 * image[0, :, :] + 0.35758 * image[1, :, :] + 0.1804 * image[2, :, :]
+    grayscale_image = grayscale_image.unsqueeze(0)
+    #can't use pow, bad in gradient
+    return grayscale_image
 def l1_loss_gray(network_output, gt):
     # Convert RGB images to grayscale
     if network_output.size(-3) == 3:
@@ -36,8 +45,10 @@ def differentialable_threld(x,C=0.3,e=0.00001,w = 10):
 
 def differentialable_event_simu(image,image_next,C=0.3):
     #return event number! img_diff can be negtive
-    img1 = rgb_to_grayscale(image)
-    img2 = rgb_to_grayscale(image_next)
+    # img1 = rgb_to_grayscale(image)
+    # img2 = rgb_to_grayscale(image_next)
+    img1 = rgb_to_LUVscale(image)
+    img2 = rgb_to_LUVscale(image_next)
     # torchvision.utils.save_image(img1, "img1.png")
     # torchvision.utils.save_image(img2, "img2.png")
     #total physical, but not work
