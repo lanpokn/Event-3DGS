@@ -10,6 +10,7 @@ better method have finished, colmap dataset,with images(e2vid or other event to 
 存在两个问题：1位姿能否和真实对上，要求imgaes两次训练读同一个 2 仿真event与真实event能否对上，判断方式如下：
 如果e2vid选则前一个作为真值，那么eventloss的仿真做差要变成i+1 - i
 如果e2vid选当前作为真值，那么eventloss的仿真做差要变成i - （i-1）
+可是火车又是i+1-i,真玄学.指标显示，i+1-i好像才是对的。。。。
 
 eventloss时间不应该过长，大部分时间不要启用虽然能训练很多轮，但似乎后边变化不大了
 让C偏大，效果显著的好

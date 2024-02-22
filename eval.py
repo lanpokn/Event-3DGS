@@ -12,14 +12,14 @@
 import os
 import torch
 from random import randint
-from utils.loss_utils import l1_loss, ssim,l1_loss_gray,ssim_gray,differentialable_event_simu,Normalize_event_frame,l1_loss_event
+from utils.loss_utils import l1_loss, ssim,l1_loss_gray,ssim_gray,differentialable_event_simu,Normalize_event_frame,rgb_to_grayscale
 from gaussian_renderer import render, network_gui
 import sys
 from scene import Scene, GaussianModel
 from utils.general_utils import safe_state
 import uuid
 from tqdm import tqdm
-from utils.image_utils import psnr
+from utils.image_utils import psnr,LPIPS
 from argparse import ArgumentParser, Namespace
 from arguments import ModelParams, PipelineParams, OptimizationParams
 from Event_sensor.event_tools import *
@@ -82,16 +82,17 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     gaussians = GaussianModel(dataset.sh_degree)
     scene = Scene(dataset, gaussians)
     gaussians.training_setup(opt)
-    #get evennt data
-    if event_path != None:
-        events_data = EventsData()
-        events_data.read_real_events(event_path, 10000000)
-        ev_data = events_data.events[0]
+    # #get evennt data
+    # if event_path != None:
+    #     events_data = EventsData()
+    #     events_data.read_IEBCS_events(os.path.join(event_path,"raw.dat"), 10000000)
+    #     ev_data = events_data.events[0]
     if checkpoint:
         (model_params, __) = torch.load(checkpoint)
         gaussians.restore(model_params, opt)
 
     bg_color = [1, 1, 1] if dataset.white_background else [0, 0, 0]
+    # bg_color = [1,1,1]
     background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
 
     iter_start = torch.cuda.Event(enable_timing = True)
@@ -103,7 +104,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     first_iter += 1
     #TODO first generate a camera position according to scene.getTrainCameras().copy()
     #use t as indicator
-    Interpolator = CameraPoseInterpolator(scene.getTrainCameras(),286)
+    Interpolator = CameraPoseInterpolator(scene.getTrainCameras(),13513*10)
     # pose = Interpolator.interpolate_pose_at_time(4000)
     for iteration in range(first_iter, opt.iterations + 1):        
         if network_gui.conn == None:
@@ -115,7 +116,9 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 if custom_cam != None:
                     net_image = render(custom_cam, gaussians, pipe, background, scaling_modifer)["render"]
                     ##may need to multi higher
-                    net_image = net_image
+                    if args.gray == True:
+                        net_image  = 0.299 * net_image[0, :, :] + 0.587 * net_image[1, :, :] + 0.114 * net_image[2, :, :]
+                        net_image = torch.stack([net_image, net_image, net_image], dim=0)
                     net_image_bytes = memoryview((torch.clamp(net_image, min=0, max=1.0) * 255).byte().permute(1, 2, 0).contiguous().cpu().numpy())
                 network_gui.send(net_image_bytes, dataset.source_path)
                 if do_training and ((iteration < int(opt.iterations)) or not keep_alive):
@@ -127,148 +130,54 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
         gaussians.update_learning_rate(iteration)
         # Every 1000 its we increase the levels of SH up to a maximum degree
-        if iteration % 1000 == 0:
-            gaussians.oneupSHdegree()
+        # if iteration % 1000 == 0:
+        #     gaussians.oneupSHdegree()
         # Pick a random Camera
         # only copy in first iteration
-        if not viewpoint_stack:
-            viewpoint_stack = scene.getTrainCameras().copy()
-
-        # viewpoint_cam = viewpoint_stack.pop(randint(0, len(viewpoint_stack)-1))
-        if args.event == True:
-            #TODO, in fact, it's better to be -2
-            #index = randint(0, len(viewpoint_stack)-2)
-            index = randint(0, len(viewpoint_stack)-3)
-        else:
-            # index = randint(0, len(viewpoint_stack)-1)
-            index = randint(0, len(viewpoint_stack)-2)
-        # viewpoint_cam = viewpoint_stack.pop(index)
-        # index= 0
-        viewpoint_cam = viewpoint_stack[index]
         # Render
         if (iteration - 1) == debug_from:
             pipe.debug = True
-
+        #TODO:Check whether 3DGS's ssim is right
+        # bg = torch.rand((3), device="cuda") if opt.random_background else background
+        # bg_gray = 0.4     
+        if not viewpoint_stack:
+            viewpoint_stack = scene.getTrainCameras().copy()
+            if args.eval ==True:
+                viewpoint_stack = scene.getTestCameras().copy()
+            if args.deblur == True:
+                viewpoint_blurry_stack = scene.getBlurryCameras().copy()
+            if args.event == True:
+                viewpoint_Event_stack = scene.getEventCameras().copy()
+        ssim_test = 0.0
+        psnr_test = 0.0
+        LPiPS_test = 0.0
+        # index_list = [5,25,45,65,85]
+        index_list = [5,25,45,65,85]
+        #TODO:Check whether 3DGS's ssim is right
         bg = torch.rand((3), device="cuda") if opt.random_background else background
-
-        render_pkg = render(viewpoint_cam, gaussians, pipe, bg)
-        image, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
-        # torchvision.utils.save_image(image, "test.png")
-
-        # Loss
-        # TODO, change to gray
-        # event: +1,-1,0, just to be a type of gray and need an initial img
-        # not that hard,just use a stack to locate img before
-        # thus,first event frame t =i corre to 3DGS frame i-dt and i+dt,dt is the acuumulation time
-        # and 3DGS can be generated arbitrayly, thus it can be done!
-        # what you need to do: make thses steps differentialable
-        # RGB to LUV, all RGB to spectral to LUV is good, use RGB is good, for it can make it more easily to converge(more posible set)
-        # but RGB is meaningless as input , only intensity graph can be generated
-
-        #first try to change gt_image and image to LUV, get L and then change the loss
-        # gt_image = viewpoint_cam.original_image.cuda()
-        # Ll1 = l1_loss(image, gt_image)
-        # loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image))
-        # loss.backward()
-        if args.event == True :
-            # assert event_path==None, "No event file provided in event mode"
-            # assert index == len(viewpoint_stack), "exceed error"    
-            #before it use a pop func, thus that item is nolongger exist
-            index_next = index+1
-            #use pop is wrong, is pop, then may discontinue
-            viewpoint_cam_next = viewpoint_stack[index_next]
-            render_pkg_next = render(viewpoint_cam_next, gaussians, pipe, bg)
-            image_next = render_pkg_next["render"]
-            # img_diff = differentialable_event_simu(viewpoint_cam.original_image.cuda(),viewpoint_cam_next.original_image.cuda())
-           ##TODO use random t1 t2 to generate gt and img_diff
-            img_diff = differentialable_event_simu(image,image_next)
-            gt_image = viewpoint_cam.original_image.cuda()
-            gt_image = Normalize_event_frame(gt_image)
-            # Ll1 = l1_loss_event(img_diff, gt_image)
-            # opt.lambda_dssim = 0.999
-            # loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(img_diff, gt_image))
-            Ll1 = 1.0 - ssim(img_diff, gt_image)
-            if 0 <= index <= 3:
-                t1 =  random.randint(0, 6)
-                t2 =  random.randint(0, 6)
-            elif len(viewpoint_stack) - 3 <= index <= len(viewpoint_stack) - 6:
-                t1 =  random.randint(len(viewpoint_stack) - 9, len(viewpoint_stack) - 3)
-                t2 =  random.randint(len(viewpoint_stack) - 9, len(viewpoint_stack) - 3)
-            else:
-                t1 = random.randint(max(0, index - 3), min(len(viewpoint_stack) - 1, index + 3))
-                t2 = random.randint(max(0, index - 3), min(len(viewpoint_stack) - 1, index + 3))
-            if t1>t2:
-                temp = t2
-                t2 = t1
-                t1 = temp
-            view = Interpolator.interpolate_pose_at_time(t1*Interpolator.dt)
-            view_next = Interpolator.interpolate_pose_at_time(t2*Interpolator.dt)
-            img1 = render(view, gaussians, pipe, bg)["render"]
-            img2 = render(view_next, gaussians, pipe, bg)["render"]
-            img_diff_ran = differentialable_event_simu(img1,img2)
-            # with torch.no_grad:
-            #     gt_image_ran = events_data.display_events_accumu(ev_data,t1*Interpolator.dt,t2*Interpolator.dt)
-            #     gt_image_ran = Normalize_event_frame(gt_image_ran)
-            gt_image_ran = events_data.display_events_accumu(ev_data,t1*Interpolator.dt,t2*Interpolator.dt)
-            gt_image_ran = np.reshape(gt_image_ran, (3, gt_image_ran.shape[0],gt_image_ran.shape[1]))
-            gt_image_ran = gt_image_ran.astype(np.float32)  # Convert to float32 if necessary
-            gt_image_ran = torch.from_numpy(gt_image_ran)  # Co
-            gt_image_ran = Normalize_event_frame(gt_image_ran).to('cuda')
-            Ll2 = 1.0 - ssim(img_diff_ran, gt_image_ran)
-            loss =  Ll1 + Ll2
-            loss.backward()
-        elif args.gray == True:
-            gt_image = viewpoint_cam.original_image.cuda()
-            ##TODO hyper parameter
-            gt_image = gt_image*3.5
-            Ll1 = l1_loss_gray(image, gt_image)
-            loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim_gray(image, gt_image))
-            loss.backward()
-        else:
-            gt_image = viewpoint_cam.original_image.cuda()
-            Ll1 = l1_loss(image, gt_image)
-            loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image))
-            loss.backward()
-
-
-        iter_end.record()
-        # no_grad, thus is not so important
-        with torch.no_grad():
-            # Progress bar
-            ema_loss_for_log = 0.4 * loss.item() + 0.6 * ema_loss_for_log
-            if iteration % 10 == 0:
-                progress_bar.set_postfix({"Loss": f"{ema_loss_for_log:.{7}f}"})
-                progress_bar.update(10)
-            if iteration == opt.iterations:
-                progress_bar.close()
-
-            # Log and save
-            training_report(tb_writer, iteration, Ll1, loss, l1_loss, iter_start.elapsed_time(iter_end), testing_iterations, scene, render, (pipe, background))
-            if (iteration in saving_iterations):
-                print("\n[ITER {}] Saving Gaussians".format(iteration))
-                scene.save(iteration)
-
-            # Densification
-            if iteration < opt.densify_until_iter:
-                # Keep track of max radii in image-space for pruning
-                gaussians.max_radii2D[visibility_filter] = torch.max(gaussians.max_radii2D[visibility_filter], radii[visibility_filter])
-                gaussians.add_densification_stats(viewspace_point_tensor, visibility_filter)
-
-                if iteration > opt.densify_from_iter and iteration % opt.densification_interval == 0:
-                    size_threshold = 20 if iteration > opt.opacity_reset_interval else None
-                    gaussians.densify_and_prune(opt.densify_grad_threshold, 0.005, scene.cameras_extent, size_threshold)
-                
-                if iteration % opt.opacity_reset_interval == 0 or (dataset.white_background and iteration == opt.densify_from_iter):
-                    gaussians.reset_opacity()
-
-            # Optimizer step
-            if iteration < opt.iterations:
-                gaussians.optimizer.step()
-                gaussians.optimizer.zero_grad(set_to_none = True)
-
-            if (iteration in checkpoint_iterations):
-                print("\n[ITER {}] Saving Checkpoint".format(iteration))
-                torch.save((gaussians.capture(), iteration), scene.model_path + "/chkpnt" + str(iteration) + ".pth")
+        bg_gray = 0.65 
+        for index in index_list:
+            #test 0, 5, 10 ...render(viewpoint_cam_pre, gaussians, pipe, bg)
+            viewpoint = viewpoint_stack[index]
+            #output gray graph
+            image = render(viewpoint, gaussians, pipe, bg)["render"]
+            gt_image = viewpoint.original_image.to("cuda")
+            image = torch.clamp(image, 0.0, 1.0)
+            gt_image = torch.clamp(gt_image, 0.0, 1.0)
+            if args.gray == True:
+                image = rgb_to_grayscale(image)
+                gt_image = rgb_to_grayscale(gt_image)
+                gt_image = torch.where(gt_image > 0.0001, gt_image, bg_gray)
+            torchvision.utils.save_image(image,'images/sim_{:05d}.{}'.format(index, "png"))
+            torchvision.utils.save_image(gt_image,'images/real_{:05d}.{}'.format(index, "png"))
+            ssim_test += ssim(image, gt_image).mean().double()
+            psnr_test += psnr(image, gt_image).mean().double()
+            LPiPS_test+= LPIPS(image, gt_image).mean().double()
+        psnr_test /= len(index_list)
+        ssim_test /= len(index_list)
+        LPiPS_test /= len(index_list)            
+        print("\n[SSIM {} PSNR {} LPiPS {}".format(ssim_test, psnr_test,LPiPS_test))
+        return 
 
 def prepare_output_and_logger(args):    
     if not args.model_path:
@@ -301,14 +210,18 @@ def training_report(tb_writer, iteration, Ll1, loss, l1_loss, elapsed, testing_i
     # Report test and samples of training set
     if iteration in testing_iterations:
         torch.cuda.empty_cache()
-        validation_configs = ({'name': 'test', 'cameras' : scene.getTestCameras()}, 
-                              {'name': 'train', 'cameras' : [scene.getTrainCameras()[idx % len(scene.getTrainCameras())] for idx in range(5, 30, 5)]})
-
+        # validation_configs = ({'name': 'test', 'cameras' : scene.getTestCameras()}, 
+        #                       {'name': 'train', 'cameras' : [scene.getTrainCameras()[idx % len(scene.getTrainCameras())] for idx in range(5, 30, 5)]})
+        validation_configs = ({'name': 'test', 'cameras' : scene.getTestCameras()},)
+        #TODO ssim and LPIPS
         for config in validation_configs:
             if config['cameras'] and len(config['cameras']) > 0:
                 l1_test = 0.0
                 psnr_test = 0.0
                 for idx, viewpoint in enumerate(config['cameras']):
+                    #test 0, 5, 10 ...
+                    if idx%5 == 0:
+                        continue
                     image = torch.clamp(renderFunc(viewpoint, scene.gaussians, *renderArgs)["render"], 0.0, 1.0)
                     gt_image = torch.clamp(viewpoint.original_image.to("cuda"), 0.0, 1.0)
                     if tb_writer and (idx < 5):
@@ -339,10 +252,12 @@ if __name__ == "__main__":
     parser.add_argument('--port', type=int, default=6009)
     parser.add_argument('--debug_from', type=int, default=-1)
     parser.add_argument('--detect_anomaly', action='store_true', default=False)
-    parser.add_argument("--test_iterations", nargs="+", type=int, default=[2_999, 3_999])
-    parser.add_argument("--save_iterations", nargs="+", type=int, default=[999,1999,2_999, 3_999])
+    # parser.add_argument("--test_iterations", nargs="+", type=int, default=[2_999,4000,5999,6999,7999])
+    # parser.add_argument("--test_iterations", nargs="+", type=int, default=[1])#need --eval,whether --eval matters train a lot , do not turn it in training!
+    parser.add_argument("--test_iterations", nargs="+", type=int, default=[])
+    parser.add_argument("--save_iterations", nargs="+", type=int, default=[999,1999,2999,3999,5999,6999,7999,8999,9999,10999])
     parser.add_argument("--quiet", action="store_true")
-    parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[999,1999,2999,4000])
+    parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[999,1999,2999,3999,5999,6999,7999,8999,9999,10999])
     parser.add_argument("--start_checkpoint", type=str, default = None)
     parser.add_argument("--dat", type=str, default = None)
     
