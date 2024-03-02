@@ -494,8 +494,10 @@ class EventsData:
 
         return img
     def display_events_accumu(self, events, t_begin, t_end):
-        width = self.width
-        height = self.height
+        # width = self.width
+        # height = self.height
+        width = 800
+        height = 800
         img = np.zeros((height, width, 3), dtype=np.uint8)
 
         events_filtered = events[(events['t'] >= t_begin) & (events['t'] <= t_end)]  # Filter events based on time

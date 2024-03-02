@@ -155,19 +155,21 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         index_list = [5,25,45,65,85]
         #TODO:Check whether 3DGS's ssim is right
         bg = torch.rand((3), device="cuda") if opt.random_background else background
-        bg_gray = 0.65 
+        bg_gray = 0.73
         for index in index_list:
             #test 0, 5, 10 ...render(viewpoint_cam_pre, gaussians, pipe, bg)
             viewpoint = viewpoint_stack[index]
             #output gray graph
             image = render(viewpoint, gaussians, pipe, bg)["render"]
-            gt_image = viewpoint.original_image.to("cuda")
+            gt_image = viewpoint_stack[index].original_image.to("cuda")
             image = torch.clamp(image, 0.0, 1.0)
             gt_image = torch.clamp(gt_image, 0.0, 1.0)
             if args.gray == True:
                 image = rgb_to_grayscale(image)
                 gt_image = rgb_to_grayscale(gt_image)
                 gt_image = torch.where(gt_image > 0.0001, gt_image, bg_gray)
+            # image = image/torch.mean(image)
+            # gt_image = gt_image/torch.mean(gt_image)
             torchvision.utils.save_image(image,'images/sim_{:05d}.{}'.format(index, "png"))
             torchvision.utils.save_image(gt_image,'images/real_{:05d}.{}'.format(index, "png"))
             ssim_test += ssim(image, gt_image).mean().double()

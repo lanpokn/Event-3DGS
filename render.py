@@ -30,6 +30,8 @@ import json
 import math
 
 def Nlerp(a1,a2,alpha):
+    if(abs(a1[1]-a2[1])>0.5):
+        a2 = -a2  
     return alpha * a1 + (1 - alpha) *a2
 #TODO problem of discontinulity not solved
 def Slerp(a1,a2,alpha):
@@ -178,7 +180,7 @@ def render_set_event(model_path, name, iteration, views, gaussians, pipeline, ba
             alpha = i / interpolation_number  # Linear interpolation parameter
             # TODO , how to get better interpolation
             #now only using Nlerp
-            q_temp = Slerp(q_end,q_start,alpha)
+            q_temp = Nlerp(q_end,q_start,alpha)
             q_temp = q_temp/np.linalg.norm(q_temp)
             R_temp = quaternion_to_rotation_matrix(q_temp)
             # Linear interpolation for translation vectors
@@ -200,8 +202,8 @@ def render_set_event(model_path, name, iteration, views, gaussians, pipeline, ba
     save_event_result(ev_full,event_path)
     # generate_images(event_path,dt,(maxLoopN+1)*interpolation_number,img_list[0].shape[1],img_list[0].shape[0])
     # generate_images_accumu(event_path,dt,(maxLoopN+1)*interpolation_number,img_list[0].shape[1],img_list[0].shape[0])
-    generate_images(event_path,dt,(maxLoopN+1)*interpolation_number,img_list[0].shape[1],img_list[0].shape[0])
-    generate_images_accumu(event_path,dt,(maxLoopN+1)*interpolation_number,img_list[0].shape[1],img_list[0].shape[0])
+    generate_images(event_path,dt,(maxLoopN+1)*interpolation_number)
+    generate_images_accumu(event_path,dt,(maxLoopN+1)*interpolation_number)
 
     if old_event == True:
         ev_full_old = EventBuffer(1)

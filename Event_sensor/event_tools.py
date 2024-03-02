@@ -63,14 +63,14 @@ def save_event_result(ev_full,event_path):
     ev_full.write(file_path)
     return file_path
     
-def generate_images(event_path,dt, total_dt_nums,width, height):
+def generate_images(event_path,dt, total_dt_nums):
     events_data = EventsData()
     events_data.read_IEBCS_events(os.path.join(event_path,"raw.dat"), (total_dt_nums+1)*dt)
     ev_data = events_data.events[0]
     for idx in range(0,total_dt_nums):
         img = events_data.display_events(ev_data,dt*idx,dt*(idx+1))
         cv2.imwrite(os.path.join(event_path, '{0:05d}'.format(idx) + ".png"), img)
-def generate_images_accumu(event_path,dt, total_dt_nums,width, height):
+def generate_images_accumu(event_path,dt, total_dt_nums):
     events_data = EventsData()
     events_data.read_IEBCS_events(os.path.join(event_path,"raw.dat"), (total_dt_nums+1)*dt)
     ev_data = events_data.events[0]
@@ -80,7 +80,18 @@ def generate_images_accumu(event_path,dt, total_dt_nums,width, height):
     
     for idx in range(0,total_dt_nums):
         img = events_data.display_events_accumu(ev_data,dt*idx,dt*(idx+1))
-        cv2.imwrite(os.path.join(event_path+"_ac", '{0:05d}'.format(idx) + ".png"), img)
+        cv2.imwrite(os.path.join(event_path+"_ac", '{0:05d}'.format(idx+3) + ".png"), img)
+def generate_images_accumu_volt(event_path,dt, total_dt_nums):
+    events_data = EventsData()
+    events_data.read_Volt_events(os.path.join(event_path,"raw.dat"), (total_dt_nums+1)*dt)
+    ev_data = events_data.events[0]
+
+    # point_cloud = events_data.display_events_3D(ev_data,0,5000)
+    # View_3D(point_cloud)
+    
+    for idx in range(0,total_dt_nums):
+        img = events_data.display_events_accumu(ev_data,dt*idx,dt*(idx+1))
+        cv2.imwrite(os.path.join(event_path+"_ac", '{0:05d}'.format(idx+3) + ".png"), img)
 def generate_images_accumu_edslike(event_path,dt, total_dt_nums,frac = 0.1):
     events_data = EventsData()
     events_data.read_IEBCS_events(os.path.join(event_path,"raw.dat"), (total_dt_nums+1)*dt)

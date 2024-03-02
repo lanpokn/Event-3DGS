@@ -12,14 +12,14 @@
 import os
 import torch
 from random import randint
-from utils.loss_utils import l1_loss, ssim,l1_loss_gray,ssim_gray,differentialable_event_simu,Normalize_event_frame,rgb_to_grayscale
+from utils.loss_utils import l1_loss, ssim,l1_loss_gray,ssim_gray,differentialable_event_simu,Normalize_event_frame,l1_loss_gray_event,chamfer_loss,l1_filter_loss_gray_event
 from gaussian_renderer import render, network_gui
 import sys
 from scene import Scene, GaussianModel
 from utils.general_utils import safe_state
 import uuid
 from tqdm import tqdm
-from utils.image_utils import psnr
+from utils.image_utils import psnr,LPIPS
 from argparse import ArgumentParser, Namespace
 from arguments import ModelParams, PipelineParams, OptimizationParams
 from Event_sensor.event_tools import *
@@ -145,12 +145,12 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         if args.event == True:
             #TODO, in fact, it's better to be -2
             #index = randint(0, len(viewpoint_stack)-2)
-            index = randint(1, len(viewpoint_stack)-3)
+            index = randint(2, len(viewpoint_stack)-4)
             # if index == 48 or index == 49:
             #     index=3
         else:
             # index = randint(0, len(viewpoint_stack)-1)
-            index = randint(1, len(viewpoint_stack)-2)
+            index = randint(2, len(viewpoint_stack)-3)
 
         #colmap do not support additional test images
         #thus we use manully test
@@ -194,15 +194,21 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             # assert index == len(viewpoint_stack), "exceed error"    
             #before it use a pop func, thus that item is nolongger exist
             
-            #i+1 - i
-            index_next = index+1
+            gt_image = viewpoint_Event_stack[index].original_image.cuda()
+            gt_image = Normalize_event_frame(gt_image)
+
+            # i+1 - i
+            index_now = index-1
+            index_next = index
+            viewpoint_cam_now = viewpoint_stack[index_now]
+            render_pkg_now = render(viewpoint_cam_now, gaussians, pipe, bg)
+            image_now = render_pkg_now["render"]
             viewpoint_cam_next = viewpoint_stack[index_next]
-            # viewpoint_cam_next = Interpolator.interpolate_pose_at_time((index+0.1)*Interpolator.dt)
             render_pkg_next = render(viewpoint_cam_next, gaussians, pipe, bg)
             image_next = render_pkg_next["render"]
-            img_diff = differentialable_event_simu(image,image_next,1)
+            img_diff = differentialable_event_simu(image_now,image_next,gt_image,0.3)
 
-            #i - (i-1),lego
+            # #i - (i-1),lego
             # index_pre = index-1
             # viewpoint_cam_pre = viewpoint_stack[index_pre]
             # # viewpoint_cam_next = Interpolator.interpolate_pose_at_time((index+0.1)*Interpolator.dt)
@@ -211,17 +217,14 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             
             # img_diff = differentialable_event_simu(image_pre,image,C=1)
 
-
-            gt_image = viewpoint_Event_stack[index].original_image.cuda()
-            gt_image = Normalize_event_frame(gt_image)
-
             # 将值归一化到[-1, 1]
             # img_diff = 2 * (img_diff - torch.min(img_diff)) / (torch.max(img_diff) -torch.min(img_diff))-1
             # gt_image = 2 * (gt_image -  torch.min(gt_image)) / (torch.max(gt_image) -  torch.min(gt_image))-1
             # opt.lambda_dssim = 0.9999999
             # Ll1 = opt.lambda_dssim * (1.0 - ssim(img_diff, gt_image))
             # loss =  Ll1
-            Ll1 = l1_loss_gray(img_diff, gt_image)
+            Ll1 = l1_loss_gray_event(img_diff, gt_image)
+            # Ll1 = l1_filter_loss_gray_event(img_diff, gt_image)
             opt.lambda_dssim = 0
             loss1 = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim_gray(img_diff, gt_image))
 
