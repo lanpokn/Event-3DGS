@@ -31,6 +31,12 @@ def rgb_to_QEscale(image):
     grayscale_image = grayscale_image.unsqueeze(0)
     #can't use pow, bad in gradient
     return grayscale_image
+def normalize_image(image):
+    # 将像素值缩放到 0 到 1 的范围内
+    min_val = torch.min(image)
+    max_val = torch.max(image)
+    normalized_image = (image - min_val) / (max_val - min_val)
+    return normalized_image
 def l1_loss_gray(network_output, gt):
     # Convert RGB images to grayscale
     if network_output.size(-3) == 3:
@@ -54,12 +60,13 @@ def l1_loss_gray_event(network_output, gt):
     # loss = torch.where(abs(gt) < 0.01, abs_diff, 0)
     # loss = torch.where(abs(gt) < 0.01, 0, abs_diff)
     # loss = torch.where(abs(gt) < 0.01, abs_diff, torch.relu(abs_diff - 0.2)) ##this is right, have improment!!!
-
-    abs_diff_1 = torch.abs(network_output - gt-0.5)
-    abs_diff_2= torch.abs(gt - network_output-0.5)
-    # loss = torch.relu(abs_diff - 0.5)#gt = 3 means 4>nt>3 , gt = -3 means -4<nt<-3, nt-gt
+    # network_output  = network_output*torch.mean(gt)/torch.mean(network_output)
+    thresh = 0.5
+    abs_diff_1 = torch.abs(network_output - gt-thresh)
+    abs_diff_2= torch.abs(gt - network_output-thresh)
+    # loss = torch.relu(abs_diff - 0.5)#gt = 3 means 4>nt>3 ,0.5>nt-gt-0.5>-0.5 gt = -3 means -4<nt<-3, nt-gt
     #BELOW is RIGHT
-    loss = torch.where(gt>0, torch.relu(abs_diff_1-0.5), torch.relu(abs_diff_2 - 0.5))
+    loss = torch.where(gt>0, torch.relu(abs_diff_1-thresh), torch.relu(abs_diff_2 - thresh))
     # 计算平均损失
     return loss.mean()
 def l1_filter_loss_gray_event(network_output, gt):
@@ -95,6 +102,45 @@ def l1_filter_loss_gray_event(network_output, gt):
     loss = mindist
     # 计算平均损失
     return loss.mean()
+def cross_entropy_loss(img_diff, gt_image):
+    # 灰度化操作
+    if img_diff.size(-3) == 3:
+        img_diff = rgb_to_grayscale(img_diff)
+    if gt_image.size(-3) == 3:    
+        gt_image = rgb_to_grayscale(gt_image)
+    mask = abs(gt_image)>0.01
+    img_diff = torch.flatten(img_diff[mask])
+    gt_image = torch.flatten(gt_image[mask])
+    # img_diff = img_diff/torch.mean(abs(img_diff))
+    # gt_image = gt_image/torch.mean(abs(gt_image))
+    input_tensor = torch.cat((img_diff.unsqueeze(0), gt_image.unsqueeze(0)), dim=0)  # 拼接成输入张量
+
+    # 计算交叉熵损失
+    loss = F.cross_entropy(input_tensor, torch.tensor([0, 1]).cuda())  # 二分类任务，期望的标签为 0 和 1
+
+    return torch.mean(loss)/50
+    # prediction = normalize_image(prediction)
+    # label = normalize_image(label)
+
+    # label = label.long()
+    # mask = (label != 0).float()
+    # num_positive = torch.sum(mask).float()
+    # num_negative = mask.numel() - num_positive
+    # #print (num_positive, num_negative)
+    # mask[mask != 0] = num_negative / (num_positive + num_negative)
+    # mask[mask == 0] = num_positive / (num_positive + num_negative)
+    # cost = torch.nn.functional.binary_cross_entropy(
+    #         prediction.float(),label.float(), weight=mask, reduce=False)
+    # 将 label 转换为 long 类型
+    # label = label.long()
+    
+
+    # 计算二元交叉熵损失，不使用权重
+    # loss = F.cross_entropy(prediction.float(), label.float())
+
+    # return torch.mean(loss)/2000
+    # return torch.sum(cost)
+
 def chamfer_loss(img_list1, img_list2):
     # Convert images to coordinate lists
     def calculate_center_of_mass(img_list1_tensor):
