@@ -12,7 +12,7 @@
 import os
 import torch
 from random import randint
-from utils.loss_utils import l1_loss, ssim,l1_loss_gray,ssim_gray,differentialable_event_simu,Normalize_event_frame,l1_loss_gray_event,chamfer_loss,l1_filter_loss_gray_event
+from utils.loss_utils import *
 from gaussian_renderer import render, network_gui
 import sys
 from scene import Scene, GaussianModel
@@ -146,6 +146,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             #TODO, in fact, it's better to be -2
             #index = randint(0, len(viewpoint_stack)-2)
             index = randint(2, len(viewpoint_stack)-4)
+            opt.opacity_reset_interval = 10000
             # if index == 48 or index == 49:
             #     index=3
         else:
@@ -223,7 +224,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             # opt.lambda_dssim = 0.9999999
             # Ll1 = opt.lambda_dssim * (1.0 - ssim(img_diff, gt_image))
             # loss =  Ll1
-            Ll1 = l1_loss_gray_event(img_diff, gt_image)
+            # Ll1 = l1_loss_gray_event(img_diff, gt_image)
+            Ll1 = cross_entropy_loss(img_diff, gt_image) + l1_loss_gray_event(img_diff, gt_image)
             # Ll1 = l1_filter_loss_gray_event(img_diff, gt_image)
             opt.lambda_dssim = 0
             loss1 = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim_gray(img_diff, gt_image))
