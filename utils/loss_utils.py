@@ -53,20 +53,27 @@ def l1_loss_gray_event(network_output, gt):
     if gt.size(-3) == 3:    
         gt = rgb_to_grayscale(gt)
     
-    # 计算绝对值差值
-    # abs_diff = torch.abs(network_output - gt)
-    # 在gt为0处应用ReLU函数
-    # loss = torch.where(gt == 0, torch.relu(abs_diff - 1), abs_diff)
-    # loss = torch.where(abs(gt) < 0.01, abs_diff, 0)
-    # loss = torch.where(abs(gt) < 0.01, 0, abs_diff)
-    # loss = torch.where(abs(gt) < 0.01, abs_diff, torch.relu(abs_diff - 0.2)) ##this is right, have improment!!!
-    # network_output  = network_output*torch.mean(gt)/torch.mean(network_output)
     thresh = 0.5
     abs_diff_1 = torch.abs(network_output - gt-thresh)
     abs_diff_2= torch.abs(gt - network_output-thresh)
+    ratio = torch.sum(gt > 0).float() / torch.sum(gt < 0).float()
     # loss = torch.relu(abs_diff - 0.5)#gt = 3 means 4>nt>3 ,0.5>nt-gt-0.5>-0.5 gt = -3 means -4<nt<-3, nt-gt
     #BELOW is RIGHT
-    loss = torch.where(gt>0, torch.relu(abs_diff_1-thresh), torch.relu(abs_diff_2 - thresh))
+    loss = torch.where(gt>0, torch.relu(abs_diff_1-thresh), torch.relu(abs_diff_2 - thresh)*ratio)
+    return loss.mean()
+def Dice_Loss(network_output, gt):
+    # Convert RGB images to grayscale
+    if network_output.size(-3) == 3:
+        network_output = rgb_to_grayscale(network_output)
+    if gt.size(-3) == 3:    
+        gt = rgb_to_grayscale(gt)
+    
+    # 计算Dice Loss
+    smooth = 1e-8
+    intersection = (network_output*gt)
+    dice_coeff = (2. * intersection + smooth) / ((network_output) + gt + smooth)
+    loss = (1. - dice_coeff)
+    
     # 计算平均损失
     return loss.mean()
 def l1_filter_loss_gray_event(network_output, gt):
@@ -75,17 +82,6 @@ def l1_filter_loss_gray_event(network_output, gt):
         network_output = rgb_to_grayscale(network_output)
     if gt.size(-3) == 3:    
         gt = rgb_to_grayscale(gt)
-    
-    # #这真的对吗，这实现了个啥
-    # # 计算绝对值差值
-    # abs_diff = torch.abs(network_output - gt)
-    # # 计算九个像素中的最小距离
-    # min_dist = F.avg_pool2d(network_output, kernel_size=3, stride=1, padding=1)  # 使用均值池化实现获取九个像素的平均值
-    # min_dist = torch.abs(min_dist - gt)  # 计算每个像素与 gt 之间的绝对距离
-    # min_dist = torch.min(min_dist.view(min_dist.size(0), -1), dim=1).values  # 获取九个像素中的最小距离
-    
-    # # 在gt不为0处应用ReLU函数
-    # loss = torch.where(gt == 0, torch.relu(abs_diff - 1), min_dist)
 
     # 计算绝对值差值
     abs_diff = torch.abs(network_output - gt)
@@ -108,47 +104,50 @@ def cross_entropy_loss(img_diff, gt_image):
         img_diff = rgb_to_grayscale(img_diff)
     if gt_image.size(-3) == 3:    
         gt_image = rgb_to_grayscale(gt_image)
-    mask = abs(gt_image)>0.01
-    img_diff = torch.flatten(img_diff[mask])
-    gt_image = torch.flatten(gt_image[mask])
+    # mask = abs(gt_image)>0.1
+    # img_diff = torch.flatten(img_diff[mask])
+    # gt_image = torch.flatten(gt_image[mask])
+    # weight = torch.flatten(abs(gt_image)+1)
+    # gt_image = torch.where(abs(gt_image)>0.1, 1.0, 0.)
+    gt_image = abs(gt_image)/torch.max(abs(gt_image))
+    img_diff = abs(img_diff)/torch.max(abs(img_diff))
+
+    # torchvision.utils.save_image(gt_image, "gt_image.png")
+    # torchvision.utils.save_image(img_diff, "img_diff.png")
+    gt_image = torch.flatten(gt_image)
+    img_diff = torch.flatten(img_diff)
     # img_diff = img_diff/torch.mean(abs(img_diff))
     # gt_image = gt_image/torch.mean(abs(gt_image))
     input_tensor = torch.cat((img_diff.unsqueeze(0), gt_image.unsqueeze(0)), dim=0)  # 拼接成输入张量
 
     # 计算交叉熵损失
     loss = F.cross_entropy(input_tensor, torch.tensor([0, 1]).cuda())  # 二分类任务，期望的标签为 0 和 1
+    # loss = F.binary_cross_entropy(gt_image, img_diff,weight) 
+    return loss/10
+def chamfer_loss(img_diff, gt_image):
+    num_rows = 5
+    num_cols = 5
 
-    return torch.mean(loss)/50
-    # prediction = normalize_image(prediction)
-    # label = normalize_image(label)
+    # 切分图像
+    sub_images_diff = img_diff.unfold(1, num_rows, num_rows).unfold(2, num_cols, num_cols)
 
-    # label = label.long()
-    # mask = (label != 0).float()
-    # num_positive = torch.sum(mask).float()
-    # num_negative = mask.numel() - num_positive
-    # #print (num_positive, num_negative)
-    # mask[mask != 0] = num_negative / (num_positive + num_negative)
-    # mask[mask == 0] = num_positive / (num_positive + num_negative)
-    # cost = torch.nn.functional.binary_cross_entropy(
-    #         prediction.float(),label.float(), weight=mask, reduce=False)
-    # 将 label 转换为 long 类型
-    # label = label.long()
-    
+    sub_images_gt = gt_image.unfold(1, num_rows, num_rows).unfold(2, num_cols, num_cols)
+    loss = 0
+    for i in range(0,num_rows):
+        for j in range(0,num_cols):
+            loss+=chamfer_loss_bas(sub_images_diff[:,:,:,i,j],sub_images_gt[:,:,:,i,j])
+    # 现在sub_images的形状为 (3, 8, 8, 32, 32)，其中3是通道数，8x8是子图的大小，32x32是每个子图的大小。
 
-    # 计算二元交叉熵损失，不使用权重
-    # loss = F.cross_entropy(prediction.float(), label.float())
-
-    # return torch.mean(loss)/2000
-    # return torch.sum(cost)
-
-def chamfer_loss(img_list1, img_list2):
+    # 将 sub_images 转换为形状为 (64, C, H, W) 的张量，其中每个子图都是一个单独的张量
+    return loss/(num_rows*num_cols)
+def chamfer_loss_bas(images_diff, images_gt):
     # Convert images to coordinate lists
-    def calculate_center_of_mass(img_list1_tensor):
+    def calculate_center_of_mass(images_diff_tensor):
         """
         计算图像的质心
 
         参数：
-        img_list1_tensor: 输入图像的PyTorch张量表示
+        images_diff_tensor: 输入图像的PyTorch张量表示
 
         返回：
         center_of_mass_x: 质心的 x 坐标
@@ -156,62 +155,79 @@ def chamfer_loss(img_list1, img_list2):
         """
         # 创建坐标网格
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        i_coords, j_coords = torch.meshgrid(torch.arange(img_list1_tensor.shape[0], device=device), torch.arange(img_list1_tensor.shape[1], device=device))
+        i_coords, j_coords = torch.meshgrid(torch.arange(images_diff_tensor.shape[0], device=device), torch.arange(images_diff_tensor.shape[1], device=device))
         # 计算加权坐标总和和权重总和
-        sum_x = torch.sum(i_coords * img_list1_tensor)
-        sum_y = torch.sum(j_coords * img_list1_tensor)
-        total_weight = torch.sum(img_list1_tensor)
+        sum_x = torch.sum(i_coords * images_diff_tensor)
+        sum_y = torch.sum(j_coords * images_diff_tensor)
+        total_weight = torch.sum(images_diff_tensor)
 
         # 计算质心
         center_of_mass_x = sum_x / total_weight
         center_of_mass_y = sum_y / total_weight
         
         return center_of_mass_x.item(), center_of_mass_y.item()
+    # def image_to_coordinate_list(image):
+    #     # Convert image to coordinate list of non-zero points
+    #     # non_zero_indices = torch.nonzero(image, as_tuple=False)
+    #     non_zero_indices = torch.nonzero(torch.abs(image) > 0.85, as_tuple=False)
+    #     return non_zero_indices.float()
     def image_to_coordinate_list(image):
-        # Convert image to coordinate list of non-zero points
-        # non_zero_indices = torch.nonzero(image, as_tuple=False)
+        # Convert image to coordinate list of non-zero points with values
         non_zero_indices = torch.nonzero(torch.abs(image) > 0.85, as_tuple=False)
-        return non_zero_indices.float()
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    if img_list1.size(-3) == 3:
-        img_list1 = 0.299 * img_list1[0, :, :] + 0.587 * img_list1[1, :, :] + 0.114 * img_list1[2, :, :]
+        values = image[non_zero_indices[:, 0], non_zero_indices[:, 1]]
+        # Concatenate coordinate list with values
+        coordinate_list = torch.cat((non_zero_indices.float(), values.unsqueeze(1)), dim=1)
+        return coordinate_list
+    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+    if images_diff.size(-3) == 3:
+        images_diff = 0.299 * images_diff[0, :, :] + 0.587 * images_diff[1, :, :] + 0.114 * images_diff[2, :, :]
     else:
-        img_list1 = img_list1[0, :, :]
-    if img_list2.size(-3) == 3:    
-        img_list2 = 0.299 * img_list2[0, :, :] + 0.587 * img_list2[1, :, :] + 0.114 * img_list2[2, :, :]
+        images_diff = images_diff[0, :, :]
+    if images_gt.size(-3) == 3:    
+        images_gt = 0.299 * images_gt[0, :, :] + 0.587 * images_gt[1, :, :] + 0.114 * images_gt[2, :, :]
     else:
-        img_list2 = img_list2[0, :, :]
+        images_gt = images_gt[0, :, :]
 
-    #x' = sigma i*img_list1(i,j)/img_list1(i,j)
-    x1,y1 = calculate_center_of_mass(img_list1)
-    x2,y2 = calculate_center_of_mass(img_list1)
-    img_list1 = image_to_coordinate_list(img_list1).squeeze(1)
-    img_list2 = image_to_coordinate_list(img_list2).squeeze(1)
-    # 将质心坐标转换为张量并将其移动到计算设备上
-    center_of_mass1 = torch.tensor([x1, y1], dtype=img_list1.dtype, device=device)
-    center_of_mass2 = torch.tensor([x2, y2], dtype=img_list2.dtype, device=device)
 
-    # 将质心从图像列表中减去
-    img_list1 = img_list1 - center_of_mass1.unsqueeze(1).unsqueeze(1)
-    img_list2 = img_list2 - center_of_mass2.unsqueeze(1).unsqueeze(1)
-    # 将 img_list1 中的值除以5，并且删除重复元素
-    # 将 img_list1 中的值除以5，并且删除重复元素
-    # img_list1 = torch.unique(img_list1 / 10, dim=0)
+    
+    images_diff = image_to_coordinate_list(images_diff).squeeze(1)
+    images_gt = image_to_coordinate_list(images_gt).squeeze(1)
+    # 根据第三列的正负将images_gt分成两组
+    positive_mask = images_gt[:, 2] > 0
+    negative_mask = ~positive_mask
 
-    # # 将 img_list2 中的值除以5，并且删除重复元素
-    # img_list2 = torch.unique(img_list2 / 10, dim=0)
-    # Compute pairwise distances
-    dists = torch.cdist(img_list1, img_list2, p=2)
-    
-    # Find nearest neighbors
-    min_dist_1_to_2, _ = torch.min(dists, dim=1)
-    # min_dist_2_to_1, _ = torch.min(dists, dim=0)
-    
-    # Compute average distance
-    avg_dist = torch.mean(min_dist_1_to_2)
-    
-    return avg_dist
+    # 从images_gt中提取两个子组
+    images_gt_positive = images_gt[positive_mask]
+    images_gt_negative = images_gt[negative_mask]
+
+    images_diff_positive = images_diff[images_diff[:, 2] > 0]
+    images_diff_negative = images_diff[~(images_diff[:, 2] > 0)]
+    # 计算距离矩阵
+    # dists_positive = torch.cdist(images_diff_positive, images_gt_positive, p=2)
+    # dists_negative = torch.cdist(images_diff_negative, images_gt_negative, p=2)
+    dists_positive = torch.cdist(images_diff_positive, images_gt_positive, p=2)
+    dists_negative = torch.cdist(images_diff_negative, images_gt_negative, p=2)
+
+    # # 计算最近邻
+    # min_dist_positive, _ = torch.min(dists_positive, dim=1)
+    # min_dist_negative, _ = torch.min(dists_negative, dim=1)
+    # 计算最近邻的索引
+    nearest_indices_positive = torch.argmin(dists_positive, dim=0)
+    nearest_indices_negative = torch.argmin(dists_negative, dim=0)
+    thrsh = 2
+    images_diff_corr = torch.index_select(images_diff_positive, dim=0, index=nearest_indices_positive)
+    abs_diff_1 = torch.abs(images_gt_positive-images_diff_corr-thrsh)
+    avg_dist_positive = torch.relu(abs_diff_1-thrsh)
+    images_diff_corr = torch.index_select(images_diff_negative, dim=0, index=nearest_indices_negative)
+    abs_diff_2 = torch.abs(images_diff_corr -images_gt_negative-thrsh)
+    avg_dist_negative = torch.relu(abs_diff_2 - thrsh)
+    # 计算两组的平均距离
+    # torch.where(gt>0, torch.relu(abs_diff_1-thresh), torch.relu(abs_diff_2 - thresh)*ratio)
+    avg_dist_positive = torch.mean(avg_dist_positive)
+    avg_dist_negative = torch.mean(avg_dist_negative)
+
+    return (avg_dist_positive+avg_dist_negative)/2
 def differentialable_threld(x,C=0.3,e=0.00001,w = 10):
     torch.sign(x)/(1 + torch.exp(w*(C - torch.abs(x))))
 
