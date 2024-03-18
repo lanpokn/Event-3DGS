@@ -86,7 +86,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     # if event_path != None:
     #     events_data = EventsData()
     #     events_data.read_IEBCS_events(os.path.join(event_path,"raw.dat"), 10000000)
-    #     ev_data = events_data.events[0]
+    #     ev_data = events_data.events[0] 
     if checkpoint:
         (model_params, __) = torch.load(checkpoint)
         gaussians.restore(model_params, opt)
@@ -167,7 +167,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             if args.gray == True:
                 image = rgb_to_grayscale(image)
                 gt_image = rgb_to_grayscale(gt_image)
-                gt_image = torch.where(gt_image > 0.0001, gt_image, bg_gray)
+                # only in mic
+                # gt_image = torch.where(abs(gt_image -166/255) > 0.0001, gt_image, bg_gray)
             # image = image/torch.mean(image)
             # gt_image = gt_image/torch.mean(gt_image)
             torchvision.utils.save_image(image,'images/sim_{:05d}.{}'.format(index, "png"))

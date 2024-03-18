@@ -92,7 +92,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         gaussians.restore(model_params, opt)
 
     bg_color = [1, 1, 1] if dataset.white_background else [0, 0, 0]
-    # bg_color = [1,1,1]
+    # bg_color = [0.651,0.651,0.651]
     background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
 
     iter_start = torch.cuda.Event(enable_timing = True)
@@ -195,19 +195,26 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             # assert index == len(viewpoint_stack), "exceed error"    
             #before it use a pop func, thus that item is nolongger exist
             
-            gt_image = viewpoint_Event_stack[index].original_image.cuda()
-            gt_image = Normalize_event_frame(gt_image)
+            # gt_image = viewpoint_Event_stack[index].original_image.cuda()
+            # gt_image = Normalize_event_frame(gt_image)
 
             # i+1 - i
-            index_now = index-1
-            index_next = index
-            viewpoint_cam_now = viewpoint_stack[index_now]
+            viewpoint_stack_r = scene.getTestCameras().copy()
+            index_now = index
+            index_next = index+1
+            viewpoint_cam_now = viewpoint_stack_r[index_now]
+            viewpoint_cam_next = viewpoint_stack_r[index_next]
+
             render_pkg_now = render(viewpoint_cam_now, gaussians, pipe, bg)
             image_now = render_pkg_now["render"]
-            viewpoint_cam_next = viewpoint_stack[index_next]
             render_pkg_next = render(viewpoint_cam_next, gaussians, pipe, bg)
             image_next = render_pkg_next["render"]
-            img_diff = differentialable_event_simu(image_now,image_next,gt_image,0.3)
+            img_diff = differentialable_event_simu(image_now,image_next,False,0.3)
+
+            #upper bound
+            image_now_gt = viewpoint_cam_now.original_image.cuda()
+            image_next_gt = viewpoint_cam_next.original_image.cuda()
+            gt_image = differentialable_event_simu(image_now_gt,image_next_gt,False,0.3)
 
             # #i - (i-1),lego
             # index_pre = index-1
@@ -224,9 +231,12 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             # opt.lambda_dssim = 0.9999999
             # Ll1 = opt.lambda_dssim * (1.0 - ssim(img_diff, gt_image))
             # loss =  Ll1
+
+            Ll1 = l1_loss_gray(img_diff, gt_image)
             # Ll1 = l1_loss_gray_event(img_diff, gt_image)
-            Ll1 = cross_entropy_loss(img_diff, gt_image) + l1_loss_gray_event(img_diff, gt_image)
-            # Ll1 = l1_filter_loss_gray_event(img_diff, gt_image)
+            # Ll1 = 1*cross_entropy_loss(img_diff, gt_image) + 0*l1_loss_gray_event(img_diff, gt_image)
+            # Ll1 = Dice_Loss(img_diff, gt_image)
+            # Ll1 = chamfer_loss(img_diff, gt_image)
             opt.lambda_dssim = 0
             loss1 = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim_gray(img_diff, gt_image))
 
@@ -237,8 +247,10 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             # gt_image = gt_image*14
             Ll1 = l1_loss_gray(image, gt_image_intensity)
             loss2 = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim_gray(image, gt_image))
-            Event_weight = 0.9
+            Event_weight = 0.99
             loss = Event_weight*loss1 + (1-Event_weight)*loss2
+            # torchvision.utils.save_image(image_now_gt, "image_now.png")
+            # torchvision.utils.save_image(image_next_gt, "image_next.png")
             # torchvision.utils.save_image(gt_image, "gt_image.png")
             # torchvision.utils.save_image(img_diff, "img_diff.png")
             loss.backward()
@@ -248,7 +260,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             #     t2 =  random.randint(0, 6)
             # elif len(viewpoint_stack) - 3 <= index <= len(viewpoint_stack) - 6:
             #     t1 =  random.randint(len(viewpoint_stack) - 9, len(viewpoint_stack) - 3)
-            #     t2 =  random.randint(len(viewpoint_stack) - 9, len(viewpoint_stack) - 3)
+            #     t2 =  random.randint(len(viewpoint_stack)0 - 9, len(viewpoint_stack) - 3)
             # else:
             #     t1 = random.randint(max(0, index - 3), min(len(viewpoint_stack) - 1, index + 3))
             #     t2 = random.randint(max(0, index - 3), min(len(viewpoint_stack) - 1, index + 3))
