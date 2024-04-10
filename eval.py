@@ -138,12 +138,11 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         if (iteration - 1) == debug_from:
             pipe.debug = True
         #TODO:Check whether 3DGS's ssim is right
-        # bg = torch.rand((3), device="cuda") if opt.random_background else background
-        # bg_gray = 0.4     
+        bg = torch.rand((3), device="cuda") if opt.random_background else background
+        bg_gray = 0.4
+                 
         if not viewpoint_stack:
-            viewpoint_stack = scene.getTrainCameras().copy()
-            if args.eval ==True:
-                viewpoint_stack = scene.getTestCameras().copy()
+            viewpoint_stack = scene.getTestCameras().copy()
             if args.deblur == True:
                 viewpoint_blurry_stack = scene.getBlurryCameras().copy()
             if args.event == True:
@@ -151,8 +150,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         ssim_test = 0.0
         psnr_test = 0.0
         LPiPS_test = 0.0
-        # index_list = [5,25,45,65,85]
         index_list = [5,25,45,65,85]
+        #index_list = [5,25]
         #TODO:Check whether 3DGS's ssim is right
         bg = torch.rand((3), device="cuda") if opt.random_background else background
         bg_gray = 0.73
@@ -160,11 +159,17 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             #test 0, 5, 10 ...render(viewpoint_cam_pre, gaussians, pipe, bg)
             viewpoint = viewpoint_stack[index]
             #output gray graph
-            image = render(viewpoint, gaussians, pipe, bg)["render"]
-            gt_image = viewpoint_stack[index].original_image.to("cuda")
-            image = torch.clamp(image, 0.0, 1.0)
-            gt_image = torch.clamp(gt_image, 0.0, 1.0)
-            if args.gray == True:
+            if args.e2vid == True:
+                image = scene.getTrainCameras().copy()[index].original_image.to("cuda")
+                gt_image = viewpoint_stack[index].original_image.to("cuda")
+                image = torch.clamp(image, 0.0, 1.0)
+                gt_image = torch.clamp(gt_image, 0.0, 1.0)
+                gt_image = rgb_to_grayscale(gt_image)
+            else:
+                image = render(viewpoint, gaussians, pipe, bg)["render"]
+                gt_image = viewpoint_stack[index].original_image.to("cuda")
+                image = torch.clamp(image, 0.0, 1.0)
+                gt_image = torch.clamp(gt_image, 0.0, 1.0)
                 image = rgb_to_grayscale(image)
                 gt_image = rgb_to_grayscale(gt_image)
                 # only in mic
@@ -181,7 +186,6 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         LPiPS_test /= len(index_list)            
         print("\n[SSIM {} PSNR {} LPiPS {}".format(ssim_test, psnr_test,LPiPS_test))
         return 
-
 def prepare_output_and_logger(args):    
     if not args.model_path:
         if os.getenv('OAR_JOB_ID'):
@@ -263,6 +267,9 @@ if __name__ == "__main__":
     parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[999,1999,2999,3999,5999,6999,7999,8999,9999,10999])
     parser.add_argument("--start_checkpoint", type=str, default = None)
     parser.add_argument("--dat", type=str, default = None)
+    parser.add_argument("--e2vid",  action="store_true")
+    parser.add_argument("--blur",  action="store_true")
+
     
     args = parser.parse_args(sys.argv[1:])
     args.save_iterations.append(args.iterations)
