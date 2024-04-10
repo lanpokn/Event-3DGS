@@ -228,10 +228,10 @@ output_path = 'D:/2023/computional imaging/my_pbrt/output/Rotate_360_high/R_360_
 # divide = 1
 # output_path = "D:/2023/computional imaging/my_pbrt/output/trans_1mps_high/T_1_H_ESIM.dat"
 # T1H
-video_path = "D:/2023/computional imaging/my_pbrt/output/Video/0028-0060.mkv"
-dt = 2857
+video_path = "D:/2024/3DGS/dataset/nerf_synthetic/mic_colmap_easy/video.mp4"
+dt = 1000
 divide = 1
-output_path = "D:/2023/computional imaging/my_pbrt/output/Video/R_360_H_ESIM.dat"
+output_path = "D:/2024/3DGS/dataset/nerf_synthetic/mic_colmap_easy/Esim.dat"
 # T06H
 # video_path = "D:/2023/computional imaging/my_pbrt/output/trans_1mps_high/25-77Eevee.avi"
 # dt = 35478
@@ -272,7 +272,7 @@ while True:
     # Add small number to avoid issues with log(I)
     img = img*divide
     img = cv2.add(img, 1)
-    img = img.reshape(-1, 3)
+    # img = img.reshape(-1, 3)
 
     ts = ts+dt
 

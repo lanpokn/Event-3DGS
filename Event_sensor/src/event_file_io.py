@@ -26,6 +26,7 @@ from metavision_core.event_io import DatWriter
 
 import h5py
 import hdf5plugin
+from scipy.optimize import curve_fit
 
 def load_h5_event(input_path):
     with h5py.File(input_path, 'r') as f:
@@ -493,6 +494,58 @@ class EventsData:
         img[:, :, 0] = off_count*10  # Store off counts in the first channel
 
         return img
+    def calculate_light_intensity_change(events, t_start, t_end):
+        #TODO, only a graph, need do a lot
+        # do:better filterd, can't just  t_end, ,like t_end+1000
+        #point select stratrgy may also need modify
+        events_filtered = events[(events['t'] >= t_start) & (events['t'] <= t_end)]  # Filter events based on time
+
+        # Sort events by time
+        sorted_events = events_filtered.sort_values(by='t')
+
+        # Find the event after t_end
+        next_event_index = sorted_events['t'].searchsorted(t_end)
+        if next_event_index >= len(sorted_events):  # If no event after t_end, return None
+            return None
+
+        next_event = sorted_events.iloc[next_event_index]
+
+        # Create arrays to store time and intensity data
+        time_data = []
+        intensity_data = []
+
+        # Initialize intensity with the intensity of next_event
+        intensity = next_event['p']
+
+        # Iterate through events backward from next_event until t_start
+        for i in range(next_event_index - 1, -1, -1):
+            event = sorted_events.iloc[i]
+            time_data.append(event['t'])
+            intensity_data.append(intensity)
+            intensity += (-1) ** (next_event['p'] == 1)  # Intensity change: +1 for off, -1 for on
+
+        # Convert lists to numpy arrays
+        time_data = np.array(time_data)
+        intensity_data = np.array(intensity_data)
+
+        # Fit a curve to the data
+        def fit_func(t, a, b, c, d):
+            return a * t ** 3 + b * t ** 2 + c * t + d
+
+        # Initial guess for curve fit
+        initial_guess = [0, 0, 0, 0]
+
+        # Perform curve fitting
+        popt, pcov = curve_fit(fit_func, time_data, intensity_data, p0=initial_guess)
+
+        # Evaluate the fitted function at t_start and t_end
+        intensity_at_t_start = fit_func(t_start, *popt)
+        intensity_at_t_end = fit_func(t_end, *popt)
+
+        # Calculate the change in intensity
+        intensity_change = intensity_at_t_end - intensity_at_t_start
+
+        return intensity_change
     def display_events_accumu(self, events, t_begin, t_end):
         # width = self.width
         # height = self.height

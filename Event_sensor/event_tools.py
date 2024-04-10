@@ -80,7 +80,7 @@ def generate_images_accumu(event_path,dt, total_dt_nums):
     
     for idx in range(0,total_dt_nums):
         img = events_data.display_events_accumu(ev_data,dt*idx,dt*(idx+1))
-        cv2.imwrite(os.path.join(event_path+"_ac", '{0:05d}'.format(idx+3) + ".png"), img)
+        cv2.imwrite(os.path.join(event_path, '{0:05d}'.format(idx+2) + ".png"), img)
 def generate_images_accumu_volt(event_path,dt, total_dt_nums):
     events_data = EventsData()
     events_data.read_Volt_events(os.path.join(event_path,"raw.dat"), (total_dt_nums+1)*dt)
