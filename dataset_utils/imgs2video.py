@@ -28,4 +28,4 @@ def generate_video_from_images(folder_path, output_video_path, fps=25):
     cv2.destroyAllWindows()
 
 # 调用函数生成视频
-generate_video_from_images("D:/2024/3DGS/dataset/nerf_synthetic/mic_colmap_easy/renders", "D:/2024/3DGS/dataset/nerf_synthetic/mic_colmap_easy/video.mp4", fps=25)
+generate_video_from_images("D:/2024/3DGS/dataset/e2vid_data/tunnel/renders", "D:/2024/3DGS/dataset/e2vid_data/tunnel/tunnel.mp4", fps=25)

@@ -31,6 +31,6 @@ def process_images_in_folder(input_folder, output_folder):
             print(f"Processed image: {filename}")
 
 # 调用函数处理图片文件夹
-input_folder = "D:/2024/3DGS/dataset/nerf_synthetic/mic_colmap_easy/renders_old"
-output_folder = "D:/2024/3DGS/dataset/nerf_synthetic/mic_colmap_easy/renders"
+input_folder = "D:/2024/3DGS/dataset/nerf_synthetic/ship_colmap_easy/renders_old"
+output_folder = "D:/2024/3DGS/dataset/nerf_synthetic/ship_colmap_easy/renders"
 process_images_in_folder(input_folder, output_folder)
