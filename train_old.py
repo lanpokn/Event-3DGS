@@ -33,7 +33,6 @@ try:
 except ImportError:
     TENSORBOARD_FOUND = False
 import random
-import torch.optim as optim
 def generate_random_integer_nearby(target_integer, range_half_width):
     """
     Generate a random integer nearby the target_integer within the specified range_half_width.
@@ -106,12 +105,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     #TODO first generate a camera position according to scene.getTrainCameras().copy()
     #use t as indicator
     Interpolator = CameraPoseInterpolator(scene.getTrainCameras(),13513*10)
-    # 定义一个新的优化器，仅用于优化参数 c
-    c = torch.nn.Parameter(torch.tensor(0.17))
-    optimizer_c = optim.Adam([c], lr=0.1)  # 设置 c 的学习率为 0.001
-    # 在 loss.backward() 之前先清零优化器的梯度
-    optimizer_c.zero_grad()
-        # pose = Interpolator.interpolate_pose_at_time(4000)
+    # pose = Interpolator.interpolate_pose_at_time(4000)
     for iteration in range(first_iter, opt.iterations + 1):        
         if network_gui.conn == None:
             network_gui.try_connect()
@@ -169,7 +163,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         # viewpoint_cam = viewpoint_stack.pop(index)
         #delete some bad img
             
-        # index = 2
+        # index = 1
         viewpoint_cam = viewpoint_stack[index]
         # Render
         if (iteration - 1) == debug_from:
@@ -196,7 +190,6 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         # Ll1 = l1_loss(image, gt_image)
         # loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image))
         # loss.backward()
-
         if args.event == True :
             # assert event_path==None, "No event file provided in event mode"
             # assert index == len(viewpoint_stack), "exceed error"    
@@ -206,28 +199,22 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             # gt_image = Normalize_event_frame(gt_image)
 
             # i+1 - i
-            # viewpoint_stack_r = scene.getTestCameras().copy()
-            viewpoint_stack_r = viewpoint_Event_stack
+            viewpoint_stack_r = scene.getTestCameras().copy()
             index_now = index
             index_next = index+1
             viewpoint_cam_now = viewpoint_stack_r[index_now]
             viewpoint_cam_next = viewpoint_stack_r[index_next]
 
-            # render_pkg_now = render(viewpoint_cam_now, gaussians, pipe, bg)
-            
-            # image_now = render_pkg_now["render"]
             render_pkg_now = render(viewpoint_cam_now, gaussians, pipe, bg)
             image_now = render_pkg_now["render"]
             render_pkg_next = render(viewpoint_cam_next, gaussians, pipe, bg)
             image_next = render_pkg_next["render"]
-                        
-
-            img_diff = differentialable_event_simu(image_now,image_next,False,c)
+            img_diff = differentialable_event_simu(image_now,image_next,False,0.3)
 
             #upper bound
             image_now_gt = viewpoint_cam_now.original_image.cuda()
             image_next_gt = viewpoint_cam_next.original_image.cuda()
-            gt_image = differentialable_event_simu(image_now_gt,image_next_gt,False,0.17)
+            gt_image = differentialable_event_simu(image_now_gt,image_next_gt,False,0.3)
 
             # #i - (i-1),lego
             # index_pre = index-1
@@ -246,7 +233,10 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             # loss =  Ll1
 
             Ll1 = l1_loss_gray(img_diff, gt_image)
-
+            # Ll1 = l1_loss_gray_event(img_diff, gt_image)
+            # Ll1 = 1*cross_entropy_loss(img_diff, gt_image) + 0*l1_loss_gray_event(img_diff, gt_image)
+            # Ll1 = Dice_Loss(img_diff, gt_image)
+            # Ll1 = chamfer_loss(img_diff, gt_image)
             opt.lambda_dssim = 0
             loss1 = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim_gray(img_diff, gt_image))
 
@@ -256,28 +246,14 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             ##TODO hyper parameter
             # gt_image = gt_image*14
             Ll1 = l1_loss_gray(image, gt_image_intensity)
-            # if args.gray == True:
-            #     loss2 = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim_gray(image, gt_image_intensity))
-            # else:
-            #     loss2 = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image_intensity))
-            loss2 = (1.0 - opt.lambda_dssim) * Ll1
+            loss2 = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim_gray(image, gt_image))
             Event_weight = 0.99
             loss = Event_weight*loss1 + (1-Event_weight)*loss2
-            if args.deblur == True:
-                viewpoint_cam_blur = viewpoint_blurry_stack[index]            
-                gt_blur_image = viewpoint_cam_blur.original_image.cuda()
-                ##TODO hyper parameter
-                # gt_image = gt_image*14
-                blur_alpha = 0.5
-                Ll1 = l1_loss(image,gt_blur_image)
-                loss = (1.0 - blur_alpha) * loss + blur_alpha *  Ll1
             # torchvision.utils.save_image(image_now_gt, "image_now.png")
             # torchvision.utils.save_image(image_next_gt, "image_next.png")
             # torchvision.utils.save_image(gt_image, "gt_image.png")
             # torchvision.utils.save_image(img_diff, "img_diff.png")
-            optimizer_c.zero_grad()
             loss.backward()
-            optimizer_c.step()
             # Ll1 = 1.0 - ssim(img_diff, gt_image)
             # if 0 <= index <= 3:
             #     t1 =  random.randint(0, 6)
@@ -320,7 +296,17 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             # torchvision.utils.save_image(image, "image.png")
             loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim_gray(image, gt_image))
             loss.backward()
-
+        elif args.deblur == True:
+            gt_image = viewpoint_cam.original_image.cuda()
+            viewpoint_cam_blur = viewpoint_blurry_stack[index]
+            gt_blur_image = viewpoint_cam_blur.original_image.cuda()
+            ##TODO hyper parameter
+            # gt_image = gt_image*14
+            blur_alpha = 0.65
+            Ll1 = (1-blur_alpha)*l1_loss_gray(image, gt_image) + blur_alpha*l1_loss(image,gt_blur_image)
+            L_ssim = (1-blur_alpha)*(1.0 - ssim_gray(image, gt_image)) + blur_alpha*(1.0 - ssim(image, gt_blur_image))
+            loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * L_ssim
+            loss.backward()
         else:
             gt_image = viewpoint_cam.original_image.cuda()
             Ll1 = l1_loss(image, gt_image)
@@ -444,9 +430,9 @@ if __name__ == "__main__":
     # parser.add_argument("--test_iterations", nargs="+", type=int, default=[2_999,4000,5999,6999,7999])
     # parser.add_argument("--test_iterations", nargs="+", type=int, default=[1])#need --eval,whether --eval matters train a lot , do not turn it in training!
     parser.add_argument("--test_iterations", nargs="+", type=int, default=[])
-    parser.add_argument("--save_iterations", nargs="+", type=int, default=[399,999,1999,2999,3999,4999,5999,6999,7999,8999,9999,10999,13999])
+    parser.add_argument("--save_iterations", nargs="+", type=int, default=[999,1999,2999,3999,5999,6999,7999,8999,9999,10999])
     parser.add_argument("--quiet", action="store_true")
-    parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[399,999,1999,2999,4999,3999,5999,6999,7999,8999,9999,10999,13999])
+    parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[999,1999,2999,3999,5999,6999,7999,8999,9999,10999])
     parser.add_argument("--start_checkpoint", type=str, default = None)
     parser.add_argument("--dat", type=str, default = None)
     
