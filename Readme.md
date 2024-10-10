@@ -1,7 +1,3 @@
-Here's a framework for your README file:
-
----
-
 # Event-3DGS: Event-based 3D Reconstruction Using 3D Gaussian Splatting
 
 ## Introduction
@@ -19,13 +15,10 @@ Follow the steps below to set up the environment and install dependencies.
    ```
 
 2. **Install the necessary dependencies:**
-   
-   ```bash
-   pip install -r requirements.txt
-   ```
-   
-3. **Additional steps:**
-   - If you're using CUDA or other specific hardware, ensure the appropriate libraries (e.g., `torch` with GPU support) are installed.
+
+   This project is based on 3DGS (https://github.com/graphdeco-inria/gaussian-splatting), so please refer to its installation instructions. 
+
+   Some parts of the code in this project use additional libraries, which were mainly my personal attempts during the exploratory phase and **can be ignored during use**.
 
 ## Dataset
 To reproduce the results presented in the paper, you will need to download and prepare the dataset as follows:
