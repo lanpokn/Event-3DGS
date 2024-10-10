@@ -65,18 +65,18 @@ This file's usage  is generally consistent with the original 3DGS, but I have ad
 To provide some examples, below are sample commands corresponding to `launch.json` in VSCode:
 
 ```
-`"args": ["-s", "your_dataset_path/","--gray","--event","--iterations","8000","-m","your_dataset_path/","--start_checkpoint","your_checkpoint_path/initial/chkpnt7999.pth"],`
+`"args": ["-s", "your_dataset_path/","--gray","--event","--iterations","8000","-m","your_dataset_path/","--start_checkpoint","your_checkpoint_path"],`
 ```
 
-This type of command is the most commonly used. It allows for various effects by adjusting the parameters in the code. For example,If your training crashes (e.g., the scene disappears), you can first try setting $\alpha$ to 0  and see if the reconstruction succeeds. If reconstruction works at this stage, then consider gradually increasing \alpha or adjusting \alpha based on the training step size. In general, reconstruction is more stable when \alpha is small, and the quality improves as \alpha increases, but if \alpha is too large, it may lead to instability in the reconstruction.
-
-For more details on the parameters, please refer to the paper.
-
-
-
 ## Others(Explanation of minor issues)
+- If your training crashes (e.g., the scene disappears), you can first try setting $\alpha$ to 0  and see if the reconstruction succeeds. If reconstruction works at this stage, then consider gradually increasing   $\alpha$ or adjusting  $\alpha$ based on the training step size. In general, reconstruction is more stable when  $\alpha$ is small, and the quality improves as  $\alpha$ increases, but if  $\alpha$ is too large, it may lead to instability in the reconstruction.
+
+  For more details on the parameters, please refer to the paper.
+
 - `Event_sensor` was originally integrated here for event simulation during my experiments. However, I later separated the dataset creation process, so this folder is essentially deprecated. In fact, since the primary purpose of this code project is to validate the proposed algorithm, it’s not very engineering-focused and does not include one-click dataset generation.
+
 - Additionally, since this method is plug-and-play and does not require a training dataset, and I currently do not have a Google Drive account or similar for sharing, I have not provided the dataset. If needed, please discuss it in the issues.
+
 - `ViewDepth.py` is a file I use to read depth maps. Since the original 3DGS lacks the ability to generate depth maps, I added a depth generation feature (enabled with `--depth`) in the `render` function to create depth maps, although this was not included in the paper. In fact, I made significant modifications to `renders.py`, but they were only used for algorithm exploration
 
 ## Acknowledgments
