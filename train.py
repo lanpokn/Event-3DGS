@@ -146,6 +146,11 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 viewpoint_blurry_stack = scene.getBlurryCameras().copy()
             if args.event == True:
                 viewpoint_Event_stack = scene.getEventCameras().copy()
+            # if args.ColorEvent ==True:
+            #     viewpoint_Event_R_stack = scene.getEventCameras_R().copy()
+            #     viewpoint_Event_G_stack = scene.getEventCameras_G().copy()
+            #     viewpoint_Event_B_stack = scene.getEventCameras_B().copy()
+
 
         # viewpoint_cam = viewpoint_stack.pop(randint(0, len(viewpoint_stack)-1))
         if args.event == True:
@@ -198,15 +203,6 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         # loss.backward()
 
         if args.event == True :
-            # assert event_path==None, "No event file provided in event mode"
-            # assert index == len(viewpoint_stack), "exceed error"    
-            #before it use a pop func, thus that item is nolongger exist
-            
-            # gt_image = viewpoint_Event_stack[index].original_image.cuda()
-            # gt_image = Normalize_event_frame(gt_image)
-
-            # i+1 - i
-            # viewpoint_stack_r = scene.getTestCameras().copy()
             viewpoint_stack_r = viewpoint_Event_stack
             index_now = index
             index_next = index+1
@@ -229,40 +225,51 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             image_next_gt = viewpoint_cam_next.original_image.cuda()
             gt_image = differentialable_event_simu(image_now_gt,image_next_gt,False,0.17)
 
-            # #i - (i-1),lego
-            # index_pre = index-1
-            # viewpoint_cam_pre = viewpoint_stack[index_pre]
-            # # viewpoint_cam_next = Interpolator.interpolate_pose_at_time((index+0.1)*Interpolator.dt)
-            # render_pkg_pre = render(viewpoint_cam_pre, gaussians, pipe, bg)
-            # image_pre = render_pkg_pre["render"]
-            
-            # img_diff = differentialable_event_simu(image_pre,image,C=1)
+            # # Ll1 = l1_loss_gray_event(img_diff, gt_image)
+            # Ll1 = l1_loss(img_diff, gt_image)
+            # # Ll1 = l1_loss_gray(img_diff, gt_image)
 
-            # 将值归一化到[-1, 1]
-            # img_diff = 2 * (img_diff - torch.min(img_diff)) / (torch.max(img_diff) -torch.min(img_diff))-1
-            # gt_image = 2 * (gt_image -  torch.min(gt_image)) / (torch.max(gt_image) -  torch.min(gt_image))-1
-            # opt.lambda_dssim = 0.9999999
-            # Ll1 = opt.lambda_dssim * (1.0 - ssim(img_diff, gt_image))
-            # loss =  Ll1
+            # opt.lambda_dssim = 0
+            # loss1 = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim_gray(img_diff, gt_image))
 
-            Ll1 = l1_loss_gray(img_diff, gt_image)
+            # #TODO pre may be better
+            # gt_image_intensity = viewpoint_cam.original_image.cuda()
+            # # gt_image_intensity = viewpoint_cam_pre.original_image.cuda()
+            # ##TODO hyper parameter
+            # # gt_image = gt_image*14
+            # # Ll1 = l1_loss_gray(image, gt_image_intensity)
+            # Ll1 = l1_loss(image, gt_image_intensity)
+
+            # loss2 = (1.0 - opt.lambda_dssim) * Ll1
+            # Event_weight = 0.98
+            # loss = Event_weight*loss1 + (1-Event_weight)*loss2
+
+            # Ll1 = l1_loss_gray_event(img_diff, gt_image)
+            Ll1 = l1_loss(img_diff, gt_image)
+            # Ll1 = l1_loss_gray(img_diff, gt_image)
 
             opt.lambda_dssim = 0
             loss1 = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim_gray(img_diff, gt_image))
 
-            #TODO pre may be better
+            # TODO pre may be better
             gt_image_intensity = viewpoint_cam.original_image.cuda()
             # gt_image_intensity = viewpoint_cam_pre.original_image.cuda()
-            ##TODO hyper parameter
-            # gt_image = gt_image*14
-            Ll1 = l1_loss_gray(image, gt_image_intensity)
-            # if args.gray == True:
-            #     loss2 = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim_gray(image, gt_image_intensity))
-            # else:
-            #     loss2 = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image_intensity))
+            ## TODO hyper parameter
+            # gt_image = gt_image * 14
+            # Ll1 = l1_loss_gray(image, gt_image_intensity)
+            Ll1 = l1_loss(image, gt_image_intensity)
+
             loss2 = (1.0 - opt.lambda_dssim) * Ll1
-            Event_weight = 0.99
-            loss = Event_weight*loss1 + (1-Event_weight)*loss2
+            Event_weight = 0.9
+
+            # 创建掩码
+            mask = (gt_image != 0).float()
+
+            # 计算最终的loss
+            loss = Event_weight * (loss1 * mask).sum() + (1 - Event_weight) * (loss2 * (1 - mask)).sum()
+
+            # 平均化 loss
+            loss /= (mask.sum() + (1 - mask).sum())
             if args.deblur == True:
                 viewpoint_cam_blur = viewpoint_blurry_stack[index]            
                 gt_blur_image = viewpoint_cam_blur.original_image.cuda()
@@ -273,40 +280,13 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 loss = (1.0 - blur_alpha) * loss + blur_alpha *  Ll1
             # torchvision.utils.save_image(image_now_gt, "image_now.png")
             # torchvision.utils.save_image(image_next_gt, "image_next.png")
+            # torchvision.utils.save_image(image_now[0,:,:], "image_now_3DGS.png")
+            # torchvision.utils.save_image(image_next[0,:,:], "image_next_3DGS.png")
             # torchvision.utils.save_image(gt_image, "gt_image.png")
             # torchvision.utils.save_image(img_diff, "img_diff.png")
             optimizer_c.zero_grad()
             loss.backward()
             optimizer_c.step()
-            # Ll1 = 1.0 - ssim(img_diff, gt_image)
-            # if 0 <= index <= 3:
-            #     t1 =  random.randint(0, 6)
-            #     t2 =  random.randint(0, 6)
-            # elif len(viewpoint_stack) - 3 <= index <= len(viewpoint_stack) - 6:
-            #     t1 =  random.randint(len(viewpoint_stack) - 9, len(viewpoint_stack) - 3)
-            #     t2 =  random.randint(len(viewpoint_stack)0 - 9, len(viewpoint_stack) - 3)
-            # else:
-            #     t1 = random.randint(max(0, index - 3), min(len(viewpoint_stack) - 1, index + 3))
-            #     t2 = random.randint(max(0, index - 3), min(len(viewpoint_stack) - 1, index + 3))
-            # if t1>t2:
-            #     temp = t2
-            #     t2 = t1
-            #     t1 = temp
-            # view = Interpolator.interpolate_pose_at_time(t1*Interpolator.dt)
-            # view_next = Interpolator.interpolate_pose_at_time(t2*Interpolator.dt)
-            # img1 = render(view, gaussians, pipe, bg)["render"]
-            # img2 = render(view_next, gaussians, pipe, bg)["render"]
-            # img_diff_ran = differentialable_event_simu(img1,img2)
-            # # with torch.no_grad:
-            # #     gt_image_ran = events_data.display_events_accumu(ev_data,t1*Interpolator.dt,t2*Interpolator.dt)
-            # #     gt_image_ran = Normalize_event_frame(gt_image_ran)
-            # gt_image_ran = events_data.display_events_accumu(ev_data,t1*Interpolator.dt,t2*Interpolator.dt)
-            # gt_image_ran = np.reshape(gt_image_ran, (3, gt_image_ran.shape[0],gt_image_ran.shape[1]))
-            # gt_image_ran = gt_image_ran.astype(np.float32)  # Convert to float32 if necessary
-            # gt_image_ran = torch.from_numpy(gt_image_ran)  # Co
-            # gt_image_ran = Normalize_event_frame(gt_image_ran).to('cuda')
-            # Ll2 = 1.0 - ssim(img_diff_ran, gt_image_ran)
-            # loss =  Ll1 + Ll2
         elif args.gray == True:
             #TODO pre may be better
             gt_image = viewpoint_cam.original_image.cuda()
@@ -320,7 +300,77 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             # torchvision.utils.save_image(image, "image.png")
             loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim_gray(image, gt_image))
             loss.backward()
+        # elif args.ColorEvent ==True:
+        #     viewpoint_stack_R = viewpoint_Event_R_stack
+        #     viewpoint_stack_G = viewpoint_Event_G_stack
+        #     viewpoint_stack_B = viewpoint_Event_B_stack
 
+        #     index_now = index
+        #     index_next = index+1
+        #     viewpoint_cam_now = viewpoint_stack_R[index_now]
+        #     viewpoint_cam_next = viewpoint_stack_R[index_next]
+
+        #     # render_pkg_now = render(viewpoint_cam_now, gaussians, pipe, bg)
+            
+        #     # image_now = render_pkg_now["render"]
+        #     render_pkg_now = render(viewpoint_cam_now, gaussians, pipe, bg)
+        #     image_now = render_pkg_now["render"]
+        #     render_pkg_next = render(viewpoint_cam_next, gaussians, pipe, bg)
+        #     image_next = render_pkg_next["render"]
+                        
+
+        #     # img_diff_R = differentialable_event_simu(image_now[0,:,:],image_next[0,:,:],True,c)
+        #     # img_diff_G = differentialable_event_simu(image_now[1,:,:],image_next[1,:,:],True,c)
+        #     # img_diff_B = differentialable_event_simu(image_now[2,:,:],image_next[2,:,:],True,c)
+
+        #     img_diff_B = differentialable_event_simu(image_now[0,:,:],image_next[0,:,:],True,c)
+        #     img_diff_G = differentialable_event_simu(image_now[1,:,:],image_next[1,:,:],True,c)
+        #     img_diff_R = differentialable_event_simu(image_now[2,:,:],image_next[2,:,:],True,c)
+
+        #     # img_diff_G = differentialable_event_simu(image_now[0,:,:],image_next[0,:,:],True,c)
+        #     # img_diff_B = differentialable_event_simu(image_now[1,:,:],image_next[1,:,:],True,c)
+        #     # img_diff_R = differentialable_event_simu(image_now[2,:,:],image_next[2,:,:],True,c)
+
+        #     #upper bound
+        #     image_now_gt_R = viewpoint_stack_R[index_now].original_image.cuda()
+        #     image_next_gt_R = viewpoint_stack_R[index_next].original_image.cuda()
+        #     gt_image_R = differentialable_event_simu(image_now_gt_R,image_next_gt_R,False,0.17)
+        #     image_now_gt_G = viewpoint_stack_G[index_now].original_image.cuda()
+        #     image_next_gt_G = viewpoint_stack_G[index_next].original_image.cuda()
+        #     gt_image_G = differentialable_event_simu(image_now_gt_R,image_next_gt_R,False,0.17)
+        #     image_now_gt_B = viewpoint_stack_B[index_now].original_image.cuda()
+        #     image_next_gt_B = viewpoint_stack_B[index_next].original_image.cuda()
+        #     gt_image_B = differentialable_event_simu(image_now_gt_R,image_next_gt_R,False,0.17)
+
+        #     Ll1 = (0.299*l1_loss(img_diff_R, gt_image_R)+0.587*l1_loss(img_diff_G, gt_image_G)+0.114*l1_loss(img_diff_B, gt_image_B))
+
+        #     opt.lambda_dssim = 0
+        #     loss1 = (1.0 - opt.lambda_dssim) * Ll1
+
+        #     #TODO pre may be better
+        #     gt_image_intensity = viewpoint_cam.original_image.cuda()
+        #     # gt_image_intensity = viewpoint_cam_pre.original_image.cuda()
+        #     ##TODO hyper parameter
+        #     # gt_image = gt_image*14
+        #     Ll1 = l1_loss_gray(image, gt_image_intensity)
+        #     loss2 = (1.0 - opt.lambda_dssim) * Ll1
+        #     Event_weight = 0.99
+        #     loss = Event_weight*loss1 + (1-Event_weight)*loss2
+        #     if args.deblur == True:
+        #         viewpoint_cam_blur = viewpoint_blurry_stack[index]            
+        #         gt_blur_image = viewpoint_cam_blur.original_image.cuda()
+        #         ##TODO hyper parameter
+        #         # gt_image = gt_image*14
+        #         blur_alpha = 0.5
+        #         Ll1 = l1_loss(image,gt_blur_image)
+        #         loss = (1.0 - blur_alpha) * loss + blur_alpha *  Ll1
+        #     # torchvision.utils.save_image(image_now_gt, "image_now.png")
+        #     # torchvision.utils.save_image(image_next_gt, "image_next.png")
+        #     # torchvision.utils.save_image(gt_image, "gt_image.png")
+        #     # torchvision.utils.save_image(img_diff, "img_diff.png")
+        #     optimizer_c.zero_grad()
+        #     loss.backward()
+        #     optimizer_c.step()
         else:
             gt_image = viewpoint_cam.original_image.cuda()
             Ll1 = l1_loss(image, gt_image)
@@ -444,9 +494,9 @@ if __name__ == "__main__":
     # parser.add_argument("--test_iterations", nargs="+", type=int, default=[2_999,4000,5999,6999,7999])
     # parser.add_argument("--test_iterations", nargs="+", type=int, default=[1])#need --eval,whether --eval matters train a lot , do not turn it in training!
     parser.add_argument("--test_iterations", nargs="+", type=int, default=[])
-    parser.add_argument("--save_iterations", nargs="+", type=int, default=[399,999,1999,2999,3999,4999,5999,6999,7999,8999,9999,10999,13999])
+    parser.add_argument("--save_iterations", nargs="+", type=int, default=[399,999,1399,1699,1999,2999,3999,4999,5999,6999,7999,8999,9999,10999,13999])
     parser.add_argument("--quiet", action="store_true")
-    parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[399,999,1999,2999,4999,3999,5999,6999,7999,8999,9999,10999,13999])
+    parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[399,999,1399,1699,1999,2999,4999,3999,5999,6999,7999,8999,9999,10999,13999])
     parser.add_argument("--start_checkpoint", type=str, default = None)
     parser.add_argument("--dat", type=str, default = None)
     
