@@ -1,5 +1,4 @@
 # Event-3DGS: Event-based 3D Reconstruction Using 3D Gaussian Splatting
-1728563249988.png
 ![Alt text](./assets/1728563249988.png)
 
 <video src="./assets/Display.avi" controls="controls" width="500" height="300">
