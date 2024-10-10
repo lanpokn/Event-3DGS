@@ -20,13 +20,12 @@ Follow the steps below to set up the environment and install dependencies.
 
    Some parts of the code in this project use additional libraries, which were mainly my personal attempts during the exploratory phase and **can be ignored during use**.
 
-## Dataset
-To reproduce the results presented in the paper, you will need to download and prepare the dataset as follows:
+## Dataset Format
+To ensure proper usage, we will introduce the format in which we organize the data.
 
-1. **Event-Camera Dataset:** We use the [Event-Camera Dataset](https://rpg.ifi.uzh.ch/davis_data.html) for training and evaluation. Please follow the instructions on their website to download the dataset.
-   
-2. **Data Preprocessing:**
-   - Extract the dataset and organize it into the following structure:
+1. **Data organization :**
+
+   - We organize the data into the following structure:
      ```
      /path/to/dataset/
        ├── training/
@@ -34,7 +33,7 @@ To reproduce the results presented in the paper, you will need to download and p
        ├── testing/
      ```
 
-3. **Dataset Configuration:**
+2. **Dataset Configuration:**
    - Update the paths in the configuration file `config/dataset_config.yaml` to point to the correct dataset location.
 
 ## Getting Started
@@ -63,8 +62,4 @@ The repository includes several functionalities:
 - **Pre-trained models** for quick experimentation.
 
 ## Acknowledgments
-We thank the authors of [Event-Camera Dataset](https://rpg.ifi.uzh.ch/davis_data.html) and the open-source libraries used in this work. This research was supported by [List any grants or institutions that provided support].
-
----
-
-You can fill in the specific details of your project where necessary, but this framework should cover the key sections for the README.
+We thank the authors of https://github.com/graphdeco-inria/gaussian-splatting and the other open-source libraries used in this work. 
