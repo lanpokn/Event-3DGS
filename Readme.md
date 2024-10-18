@@ -43,7 +43,7 @@ To ensure proper usage, we will introduce the format in which we organize the da
    - The 'images_event' folder also stores the pure intensity images estimated from events, but the images in this folder are **solely used to provide intensity differences** during the optimization process. Since the estimation methods for intensity and intensity differences may vary, I separated them when validating the algorithm.
    - 'images_blurry' is optional and contains blurry images captured by an RGB camera, primarily used to validate its deblurring capability as presented in the original paper.
    - 'renders' stores the RGB ground truth, which is prepared for testing and does not participate in the reconstruction process.
-   - The entire 'sparse' folder contains the camera poses in COLMAP format. For using COLMAP, please refer to xxx. If you only have event data without pose or RGB information, you can first estimate the intensity images from the events and then use these intensity images for calibration with COLMAP.
+   - The entire 'sparse' folder contains the camera poses in COLMAP format. For using COLMAP, please refer to https://colmap.github.io/. If you only have event data without pose or RGB information, you can first estimate the intensity images from the events and then use these intensity images for calibration with COLMAP.
 
 3. **Notification:**
 
