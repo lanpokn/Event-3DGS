@@ -3,7 +3,7 @@
 
 
 ## Introduction
-This repository contains the research code for **Event-3DGS: Event-based 3D Reconstruction Using 3D Gaussian Splatting**， whici is accepted by NeurlPS 2024. The video introduction can refer to https://recorder-v3.slideslive.com/?share=92624&s=576b3d56-3c7c-46aa-abdf-1eac1d3a4d1d
+This repository contains the research code for **Event-3DGS: Event-based 3D Reconstruction Using 3D Gaussian Splatting**, which is accepted by NeurlPS 2024. The video introduction can refer to https://recorder-v3.slideslive.com/?share=92624&s=576b3d56-3c7c-46aa-abdf-1eac1d3a4d1d
 
 The code is designed to implement the event-based 3D reconstruction algorithm described in the paper and includes key components such as the photovoltage contrast estimation module and a novel event-based loss for optimizing reconstruction quality.
 
