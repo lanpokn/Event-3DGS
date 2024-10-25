@@ -53,7 +53,7 @@ To ensure proper usage, we will introduce the format in which we organize the da
 
    There are many methods to obtain 'images' and 'images_event,' including but not limited to neural networks, classical integration methods, and filtering methods. You can choose based on your specific situation. If you're unfamiliar with this area, you can refer to https://github.com/ziweiWWANG/AKF and https://github.com/uzh-rpg/rpg_e2vid. For details on our method, please refer to the paper.
 4. **Data Example:**
-   Here, we provide a simulated dataset (with blurred images and event data simulated based on an existing dataset) for easy debugging. The images and images_event have already been generated based on the simulated events.
+   Here, we provide a simulated scene (with blurred images and event data simulated based on an existing dataset) for easy debugging. The images and images_event have already been generated based on the simulated events.
    
    The file shared via Baidu Netdisk: `train_colmap_easy.zip`  
    Link: [https://pan.baidu.com/s/1T0a77lgxYaIveNDMBrxr_w](https://pan.baidu.com/s/1T0a77lgxYaIveNDMBrxr_w)  
