@@ -55,10 +55,9 @@ To ensure proper usage, we will introduce the format in which we organize the da
 4. **Data Example:**
    Here, we provide a simulated scene (with blurred images and event data simulated based on an existing dataset) for easy debugging. The images and images_event have already been generated based on the simulated events.
    
-   The file shared via Baidu Netdisk: `train_colmap_easy.zip`  
-   Link: [https://pan.baidu.com/s/1T0a77lgxYaIveNDMBrxr_w](https://pan.baidu.com/s/1T0a77lgxYaIveNDMBrxr_w)  
-   Access code: h88z
-
+   The file shared via Baidu Netdisk: `train_colmap_easy(1).zip`  
+   Link: https://pan.baidu.com/s/1I9AP7ihz8wTYb2gmH0py1Q 
+   Access code: m388 
 
 ## Getting Started
 Once you've set up the environment and arranged the dataset, you can use train.py to reconstruct the scene.
