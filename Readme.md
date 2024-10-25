@@ -79,7 +79,7 @@ To provide some examples, below are sample commands corresponding to `launch.jso
 ```
 
 ## Others(Explanation of minor issues)
-- **If your training crashes** (e.g., the scene disappears), you can first try setting $\alpha$ to 0  and see if the reconstruction succeeds. If reconstruction works at this stage, then consider gradually increasing   $\alpha$ or adjusting  $\alpha$ based on the training step size. In general, reconstruction is more stable when  $\alpha$ is small, and the quality improves as  $\alpha$ increases, but if  $\alpha$ is too large, it may lead to instability in the reconstruction.
+- **If your training crashes** (e.g., the scene disappears), you can first try setting $\alpha$ to 0  and see if the reconstruction succeeds. If reconstruction works at this stage, then consider gradually increasing   $\alpha$ or adjusting  $\alpha$ based on the training step size. In general, reconstruction is more stable when  $\alpha$ is small, and the quality improves as  $\alpha$ increases, but if  $\alpha$ is too large, it may lead to instability in the reconstruction.（setting alpha to zero will make the reconstruction very stable, I personally have not experienced any crashing issues in this situation.)
 
    3DGS is much more prone to crashing than NeRF in the differential aspect; strong differential weights or too many training epochs can lead to training failure. It’s especially important to pay attention to the setting of opacity_reset_interval, as this reset can easily cause subsequent training to stagnate, which is why I changed it to 10,000. The reason why 3DGS is more likely to crash than NeRF (in the context of events) remains an open question worth exploring.
   
