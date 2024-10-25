@@ -103,13 +103,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     ema_loss_for_log = 0.0
     progress_bar = tqdm(range(first_iter, opt.iterations), desc="Training progress")
     first_iter += 1
-    #TODO first generate a camera position according to scene.getTrainCameras().copy()
-    #use t as indicator
-    # Interpolator = CameraPoseInterpolator(scene.getTrainCameras(),13513*10)
-    # 定义一个新的优化器，仅用于优化参数 c
     c = torch.nn.Parameter(torch.tensor(0.17))
     optimizer_c = optim.Adam([c], lr=0.1)  # 设置 c 的学习率为 0.001
-    # 在 loss.backward() 之前先清零优化器的梯度
     optimizer_c.zero_grad()
         # pose = Interpolator.interpolate_pose_at_time(4000)
     for iteration in range(first_iter, opt.iterations + 1):        
@@ -154,7 +149,6 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
         # viewpoint_cam = viewpoint_stack.pop(randint(0, len(viewpoint_stack)-1))
         if args.event == True:
-            #TODO, in fact, it's better to be -2
             #index = randint(0, len(viewpoint_stack)-2)
             index = randint(2, len(viewpoint_stack)-4)
             opt.opacity_reset_interval = 10000
@@ -187,7 +181,6 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         # torchvision.utils.save_image(image, "test.png")
 
         # Loss
-        # TODO, change to gray
         # event: +1,-1,0, just to be a type of gray and need an initial img
         # not that hard,just use a stack to locate img before
         # thus,first event frame t =i corre to 3DGS frame i-dt and i+dt,dt is the acuumulation time
@@ -232,10 +225,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             # opt.lambda_dssim = 0
             # loss1 = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim_gray(img_diff, gt_image))
 
-            # #TODO pre may be better
             # gt_image_intensity = viewpoint_cam.original_image.cuda()
             # # gt_image_intensity = viewpoint_cam_pre.original_image.cuda()
-            # ##TODO hyper parameter
             # # gt_image = gt_image*14
             # # Ll1 = l1_loss_gray(image, gt_image_intensity)
             # Ll1 = l1_loss(image, gt_image_intensity)
@@ -251,10 +242,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             opt.lambda_dssim = 0
             loss1 = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim_gray(img_diff, gt_image))
 
-            # TODO pre may be better
             gt_image_intensity = viewpoint_cam.original_image.cuda()
             # gt_image_intensity = viewpoint_cam_pre.original_image.cuda()
-            ## TODO hyper parameter
             # gt_image = gt_image * 14
             # Ll1 = l1_loss_gray(image, gt_image_intensity)
             Ll1 = l1_loss(image, gt_image_intensity)
@@ -273,7 +262,6 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             if args.deblur == True:
                 viewpoint_cam_blur = viewpoint_blurry_stack[index]            
                 gt_blur_image = viewpoint_cam_blur.original_image.cuda()
-                ##TODO hyper parameter
                 # gt_image = gt_image*14
                 blur_alpha = 0.5
                 Ll1 = l1_loss(image,gt_blur_image)
@@ -288,12 +276,10 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             loss.backward()
             optimizer_c.step()
         elif args.gray == True:
-            #TODO pre may be better
             gt_image = viewpoint_cam.original_image.cuda()
             # index_pre = index-1
             # viewpoint_cam_pre = viewpoint_stack[index_pre]
             # gt_image = viewpoint_cam_pre.original_image.cuda()
-            ##TODO hyper parameter
             # gt_image = gt_image*14
             Ll1 = l1_loss_gray(image, gt_image)
             # torchvision.utils.save_image(gt_image, "gt_image.png")
@@ -347,10 +333,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         #     opt.lambda_dssim = 0
         #     loss1 = (1.0 - opt.lambda_dssim) * Ll1
 
-        #     #TODO pre may be better
         #     gt_image_intensity = viewpoint_cam.original_image.cuda()
         #     # gt_image_intensity = viewpoint_cam_pre.original_image.cuda()
-        #     ##TODO hyper parameter
         #     # gt_image = gt_image*14
         #     Ll1 = l1_loss_gray(image, gt_image_intensity)
         #     loss2 = (1.0 - opt.lambda_dssim) * Ll1
@@ -359,7 +343,6 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         #     if args.deblur == True:
         #         viewpoint_cam_blur = viewpoint_blurry_stack[index]            
         #         gt_blur_image = viewpoint_cam_blur.original_image.cuda()
-        #         ##TODO hyper parameter
         #         # gt_image = gt_image*14
         #         blur_alpha = 0.5
         #         Ll1 = l1_loss(image,gt_blur_image)
@@ -396,7 +379,6 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 scene.save(iteration)
 
             # Densification
-            #TODO， these judge how to change gaussian by status, how to fix it in Eventloss? 
             if iteration < opt.densify_until_iter:
                 # Keep track of max radii in image-space for pruning
                 gaussians.max_radii2D[visibility_filter] = torch.max(gaussians.max_radii2D[visibility_filter], radii[visibility_filter])
@@ -452,7 +434,6 @@ def training_report(tb_writer, iteration, Ll1, loss, l1_loss, elapsed, testing_i
         # validation_configs = ({'name': 'test', 'cameras' : scene.getTestCameras()}, 
         #                       {'name': 'train', 'cameras' : [scene.getTrainCameras()[idx % len(scene.getTrainCameras())] for idx in range(5, 30, 5)]})
         validation_configs = ({'name': 'test', 'cameras' : scene.getTestCameras()},)
-        #TODO ssim and LPIPS
         for config in validation_configs:
             if config['cameras'] and len(config['cameras']) > 0:
                 l1_test = 0.0
