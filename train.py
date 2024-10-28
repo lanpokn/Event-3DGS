@@ -41,42 +41,7 @@ def generate_random_integer_nearby(target_integer, range_half_width):
     lower_bound = target_integer - range_half_width
     upper_bound = target_integer + range_half_width
     return random.randint(lower_bound, upper_bound)
-# class CameraPoseInterpolator:
-#     def __init__(self, camera_poses,dt):
-#         self.camera_poses = camera_poses
-#         self.dt = dt
 
-#     def interpolate_pose_at_time(self, t):
-#         """
-#         Interpolates camera pose at a given time t.
-#         more range to avoid out of range
-#         """
-#         for idx in range(-10,len(self.camera_poses) + 10):
-#             if idx <0:
-#                 view = self.camera_poses[0]
-#                 view_next = self.camera_poses[1]
-#             else:
-#                 view = self.camera_poses[len(self.camera_poses)-1]
-#                 view_next = self.camera_poses[len(self.camera_poses)-2]
-
-#             view = self.camera_poses[idx]
-#             view_next = self.camera_poses[idx + 1]
-
-#             if t >= self.dt*idx and t <= self.dt*(idx+1):
-#                 alpha = (t - self.dt*idx) / (self.dt)
-
-#                 q_start = rotation_matrix_to_quaternion(view.R)
-#                 q_end = rotation_matrix_to_quaternion(view_next.R)
-#                 T_start = view.T
-#                 T_end = view_next.T
-
-#                 q_temp = Nlerp(q_end, q_start, alpha)
-#                 q_temp /= np.linalg.norm(q_temp)
-#                 R_temp = quaternion_to_rotation_matrix(q_temp)
-
-#                 T_temp = Nlerp(T_end, T_start, alpha)
-#                 view_temp = Generate_new_view(view,R_temp,T_temp)
-#                 return view_temp
 def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from,event_path):
     first_iter = 0
     tb_writer = prepare_output_and_logger(dataset)
@@ -180,20 +145,6 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         image, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
         # torchvision.utils.save_image(image, "test.png")
 
-        # Loss
-        # event: +1,-1,0, just to be a type of gray and need an initial img
-        # not that hard,just use a stack to locate img before
-        # thus,first event frame t =i corre to 3DGS frame i-dt and i+dt,dt is the acuumulation time
-        # and 3DGS can be generated arbitrayly, thus it can be done!
-        # what you need to do: make thses steps differentialable
-        # RGB to LUV, all RGB to spectral to LUV is good, use RGB is good, for it can make it more easily to converge(more posible set)
-        # but RGB is meaningless as input , only intensity graph can be generated
-
-        #first try to change gt_image and image to LUV, get L and then change the loss
-        # gt_image = viewpoint_cam.original_image.cuda()
-        # Ll1 = l1_loss(image, gt_image)
-        # loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image))
-        # loss.backward()
 
         if args.event == True :
             viewpoint_stack_r = viewpoint_Event_stack
@@ -218,22 +169,6 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             image_next_gt = viewpoint_cam_next.original_image.cuda()
             gt_image = differentialable_event_simu(image_now_gt,image_next_gt,False,0.17)
 
-            # # Ll1 = l1_loss_gray_event(img_diff, gt_image)
-            # Ll1 = l1_loss(img_diff, gt_image)
-            # # Ll1 = l1_loss_gray(img_diff, gt_image)
-
-            # opt.lambda_dssim = 0
-            # loss1 = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim_gray(img_diff, gt_image))
-
-            # gt_image_intensity = viewpoint_cam.original_image.cuda()
-            # # gt_image_intensity = viewpoint_cam_pre.original_image.cuda()
-            # # gt_image = gt_image*14
-            # # Ll1 = l1_loss_gray(image, gt_image_intensity)
-            # Ll1 = l1_loss(image, gt_image_intensity)
-
-            # loss2 = (1.0 - opt.lambda_dssim) * Ll1
-            # Event_weight = 0.98
-            # loss = Event_weight*loss1 + (1-Event_weight)*loss2
 
             # Ll1 = l1_loss_gray_event(img_diff, gt_image)
             Ll1 = l1_loss(img_diff, gt_image)
