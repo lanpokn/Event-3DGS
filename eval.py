@@ -40,42 +40,7 @@ def generate_random_integer_nearby(target_integer, range_half_width):
     lower_bound = target_integer - range_half_width
     upper_bound = target_integer + range_half_width
     return random.randint(lower_bound, upper_bound)
-# class CameraPoseInterpolator:
-#     def __init__(self, camera_poses,dt):
-#         self.camera_poses = camera_poses
-#         self.dt = dt
 
-#     def interpolate_pose_at_time(self, t):
-#         """
-#         Interpolates camera pose at a given time t.
-#         more range to avoid out of range
-#         """
-#         for idx in range(-10,len(self.camera_poses) + 10):
-#             if idx <0:
-#                 view = self.camera_poses[0]
-#                 view_next = self.camera_poses[1]
-#             else:
-#                 view = self.camera_poses[len(self.camera_poses)-1]
-#                 view_next = self.camera_poses[len(self.camera_poses)-2]
-
-#             view = self.camera_poses[idx]
-#             view_next = self.camera_poses[idx + 1]
-
-#             if t >= self.dt*idx and t <= self.dt*(idx+1):
-#                 alpha = (t - self.dt*idx) / (self.dt)
-
-#                 q_start = rotation_matrix_to_quaternion(view.R)
-#                 q_end = rotation_matrix_to_quaternion(view_next.R)
-#                 T_start = view.T
-#                 T_end = view_next.T
-
-#                 q_temp = Nlerp(q_end, q_start, alpha)
-#                 q_temp /= np.linalg.norm(q_temp)
-#                 R_temp = quaternion_to_rotation_matrix(q_temp)
-
-#                 T_temp = Nlerp(T_end, T_start, alpha)
-#                 view_temp = Generate_new_view(view,R_temp,T_temp)
-#                 return view_temp
 def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from,event_path):
     first_iter = 0
     tb_writer = prepare_output_and_logger(dataset)
