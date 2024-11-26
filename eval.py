@@ -26,7 +26,7 @@ from arguments import ModelParams, PipelineParams, OptimizationParams
 # import copy
 # from Event_sensor.src.event_buffer import EventBuffer
 import torchvision
-from render import Generate_new_view
+#from render import Generate_new_view
 try:
     from torch.utils.tensorboard import SummaryWriter
     TENSORBOARD_FOUND = True
