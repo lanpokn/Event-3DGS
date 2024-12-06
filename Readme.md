@@ -57,7 +57,10 @@ To ensure proper usage, we will introduce the format in which we organize the da
    
    The file shared via Baidu Netdisk: `train_colmap_easy(1).zip`  
    Link: https://pan.baidu.com/s/1I9AP7ihz8wTYb2gmH0py1Q 
-   Access code: m388 
+   Access code: m388
+
+   via Google Drive:`train_colmap_easy(1).zip`  
+   https://drive.google.com/file/d/1OBPMNFtXsfNO5AJl5SwoKn75mY-Pk2Fg/view?usp=drive_link
 
 ## Getting Started
 Once you've set up the environment and arranged the dataset, you can use train.py to reconstruct the scene.
