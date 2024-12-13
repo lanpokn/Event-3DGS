@@ -1,5 +1,5 @@
-#It has been deprecated due to the poor stability of the pure integration method.
-#from Event_sensor.event_tools import *
+# It has been deprecated due to the poor stability of the pure integration method.
+# from Event_sensor.event_tools import *
 
 # generate_images_accumu_eds("D:/2024/3DGS/Nerf_Event/data/eds/09_ziggy_flying_pieces/",13513*10,140,1)
 # generate_images_accumu_edslike("D:/2024/3DGS/Nerf_Event/data/eds/09_ziggy_flying_pieces/",13513*10,140,1)
