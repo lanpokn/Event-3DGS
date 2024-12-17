@@ -66,8 +66,11 @@ To ensure proper usage, we will introduce the format in which we organize the da
 5. **All data in the paper:**
 （Only original Data, tested only on Windows 11. For data sources, please refer to the paper citation.）
 
-The file shared via Baidu Netdisk：pure_data.zip
-Link: https://pan.baidu.com/s/1xOZ26c3tI5hwUN7lcB2brA Access code: 43b5
+   The file shared via Baidu Netdisk：pure_data.zip
+   Link: https://pan.baidu.com/s/1xOZ26c3tI5hwUN7lcB2brA Access code: 43b5
+
+   via Google Drive:pure_data.zip
+   https://drive.google.com/file/d/1fntzdCgRR7uy5j8gY7TDoCIP2x_1quv4/view?usp=sharing
 
 
 ## Getting Started
