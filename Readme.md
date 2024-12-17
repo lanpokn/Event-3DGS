@@ -63,6 +63,12 @@ To ensure proper usage, we will introduce the format in which we organize the da
 
    via Google Drive:`train_colmap_easy(1).zip`  
    https://drive.google.com/file/d/1OBPMNFtXsfNO5AJl5SwoKn75mY-Pk2Fg/view?usp=drive_link
+5. **All data in the paper:**
+（Only original Data, tested only on Windows 11. For data sources, please refer to the paper citation.）
+
+The file shared via Baidu Netdisk：pure_data.zip
+Link: https://pan.baidu.com/s/1xOZ26c3tI5hwUN7lcB2brA Access code: 43b5
+
 
 ## Getting Started
 Once you've set up the environment and arranged the dataset, you can use train.py to reconstruct the scene.
