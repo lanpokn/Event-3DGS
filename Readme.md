@@ -105,5 +105,7 @@ When I conducted the experiments, for the sake of convenience in recording, the 
 
 - `ViewDepth.py` is a file I use to read depth maps. Since the original 3DGS lacks the ability to generate depth maps, I added a depth generation feature (enabled with `--depth`) in the `render` function to create depth maps, although this was not included in the paper. In fact, I made significant modifications to `renders.py`, but they were only used for algorithm exploration
 
+- simulated event data mainly comes from: Dvs-voltmeter: Stochastic process-based event simulator for dynamic vision sensors. You can use it to generate your own testset. 
+
 ## Acknowledgments
 We thank the authors of https://github.com/graphdeco-inria/gaussian-splatting and the other open-source libraries used in this work. 
